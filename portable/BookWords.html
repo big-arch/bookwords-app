@@ -1567,7 +1567,7 @@ function loadCloudConfig() {
     return {
       enabled: Boolean(parsed?.enabled),
       provider: parsed?.provider || "supabase",
-      supabaseUrl: parsed?.supabaseUrl || "",
+      supabaseUrl: normalizeSupabaseUrl(parsed?.supabaseUrl || ""),
       supabaseAnonKey: parsed?.supabaseAnonKey || "",
       email: parsed?.email || "",
       userId: parsed?.userId || "",
@@ -1766,7 +1766,15 @@ function getAppBaseUrl() {
 }
 
 function normalizeSupabaseUrl(value) {
-  return value.trim().replace(/\/+$/, "");
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.origin;
+  } catch {
+    return trimmed.replace(/\/+$/, "");
+  }
 }
 
 function validateCloudSettings() {
@@ -1837,6 +1845,7 @@ async function initCloud() {
 
 async function saveCloudSettings() {
   cloudConfig.supabaseUrl = normalizeSupabaseUrl(els.cloudUrl.value);
+  els.cloudUrl.value = cloudConfig.supabaseUrl;
   cloudConfig.supabaseAnonKey = els.cloudAnonKey.value.trim();
   cloudConfig.email = els.cloudEmail.value.trim();
   cloudConfig.provider = "supabase";
