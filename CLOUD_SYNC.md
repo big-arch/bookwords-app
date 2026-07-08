@@ -55,6 +55,15 @@ In the BookWords sidebar, paste:
 - Supabase anon key;
 - email for login.
 
+In Supabase, also open:
+
+`Authentication` -> `URL Configuration`
+
+Set:
+
+- Site URL: `https://big-arch.github.io/bookwords-app/`
+- Redirect URLs: `https://big-arch.github.io/bookwords-app/`
+
 Then click:
 
 1. `Сохранить`

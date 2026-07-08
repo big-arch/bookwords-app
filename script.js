@@ -358,6 +358,45 @@ function cloudIsConfigured() {
   return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey);
 }
 
+function getAppBaseUrl() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.search = "";
+  if (!url.pathname.endsWith("/")) {
+    url.pathname = url.pathname.replace(/\/[^/]*$/, "/");
+  }
+  return url.href;
+}
+
+function normalizeSupabaseUrl(value) {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function validateCloudSettings() {
+  const url = normalizeSupabaseUrl(els.cloudUrl.value);
+  const key = els.cloudAnonKey.value.trim();
+
+  if (!url || !key) {
+    return "Заполни Supabase URL и anon public key.";
+  }
+
+  try {
+    const parsed = new URL(url);
+    const isLocal = ["localhost", "127.0.0.1"].includes(parsed.hostname);
+    if (!isLocal && !parsed.hostname.endsWith(".supabase.co")) {
+      return "Supabase URL должен выглядеть так: https://xxxxx.supabase.co";
+    }
+  } catch {
+    return "Supabase URL должен начинаться с https:// и быть похож на https://xxxxx.supabase.co";
+  }
+
+  if (!key.startsWith("eyJ")) {
+    return "Похоже, это не anon public key. Нужен ключ anon/public, который обычно начинается с eyJ.";
+  }
+
+  return "";
+}
+
 function hydrateCloudForm() {
   if (els.cloudUrl) els.cloudUrl.value = cloudConfig.supabaseUrl || "";
   if (els.cloudAnonKey) els.cloudAnonKey.value = cloudConfig.supabaseAnonKey || "";
@@ -400,7 +439,7 @@ async function initCloud() {
 }
 
 async function saveCloudSettings() {
-  cloudConfig.supabaseUrl = els.cloudUrl.value.trim();
+  cloudConfig.supabaseUrl = normalizeSupabaseUrl(els.cloudUrl.value);
   cloudConfig.supabaseAnonKey = els.cloudAnonKey.value.trim();
   cloudConfig.email = els.cloudEmail.value.trim();
   cloudConfig.provider = "supabase";
@@ -412,11 +451,13 @@ async function saveCloudSettings() {
 }
 
 async function loginCloud() {
-  await saveCloudSettings();
-  if (!cloudIsConfigured()) {
-    alert("Заполни Supabase URL и anon key.");
+  const validationError = validateCloudSettings();
+  if (validationError) {
+    alert(validationError);
     return;
   }
+
+  await saveCloudSettings();
 
   const email = els.cloudEmail.value.trim();
   if (!email) {
@@ -429,7 +470,7 @@ async function loginCloud() {
     const { error } = await client.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.href
+        emailRedirectTo: getAppBaseUrl()
       }
     });
     if (error) throw error;
@@ -443,7 +484,7 @@ async function loginCloud() {
     cloudConfig.lastError = error?.message || "Login failed";
     saveCloudConfig();
     renderSyncStatus();
-    alert("Не удалось отправить письмо для входа. Проверь Supabase настройки.");
+    alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase: Authentication -> URL Configuration -> Redirect URLs. Там должен быть адрес ${getAppBaseUrl()}`);
   }
 }
 
