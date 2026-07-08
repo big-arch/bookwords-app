@@ -13,8 +13,8 @@ const css = fs.readFileSync(cssPath, "utf8");
 const script = fs.readFileSync(scriptPath, "utf8");
 
 const portable = html
-  .replace('<link rel="stylesheet" href="styles.css" />', `<style>\n${css}\n</style>`)
-  .replace('<script src="script.js"></script>', `<script>\n${script}\n</script>`);
+  .replace(/<link rel="stylesheet" href="styles\.css(?:\?v=[^"]+)?" \/>/, `<style>\n${css}\n</style>`)
+  .replace(/<script src="script\.js(?:\?v=[^"]+)?"><\/script>/, `<script>\n${script}\n</script>`);
 
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outPath, portable, "utf8");
