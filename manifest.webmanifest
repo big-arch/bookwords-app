@@ -1,0 +1,36 @@
+{
+  "name": "BookWords",
+  "short_name": "BookWords",
+  "description": "Личный словарь английских слов из книг с карточками, тестами, звуком и визуальными ассоциациями.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f0e8",
+  "theme_color": "#2f8f83",
+  "categories": ["education", "books", "productivity"],
+  "icons": [
+    {
+      "src": "icons/bookwords-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Добавить слово",
+      "short_name": "Слово",
+      "description": "Открыть BookWords и добавить новое слово.",
+      "url": "./#add",
+      "icons": [
+        {
+          "src": "icons/bookwords-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}

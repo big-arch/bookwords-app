@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2f8f83" />
+    <meta name="description" content="BookWords помогает учить английские слова из книг через карточки, тесты, звук и визуальные ассоциации." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="BookWords" />
+    <title>BookWords</title>
+    <link rel="icon" href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="14" fill="%231f2933"/%3E%3Cpath d="M12 18c8-4 15-2 20 4 5-6 12-8 20-4v31c-8-4-15-2-20 3-5-5-12-7-20-3V18z" fill="%23fff"/%3E%3Cpath d="M18 24c5-3 10-1 14 4 4-5 9-7 14-4M18 32c5-3 10-1 14 4 4-5 9-7 14-4M18 40c5-3 10-1 14 4 4-5 9-7 14-4" fill="none" stroke="%232f8f83" stroke-width="4" stroke-linecap="round"/%3E%3Cpath d="M32 22v30" stroke="%231f2933" stroke-width="3" stroke-linecap="round"/%3E%3C/svg%3E' />
+    <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
+    <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" role="img">
+              <path class="book-cover" d="M10 17c8-4 16-2 22 5 6-7 14-9 22-5v34c-9-4-16-2-22 4-6-6-13-8-22-4V17z" />
+              <path class="brain-line" d="M18 24c5-4 10-2 14 4 4-6 9-8 14-4" />
+              <path class="brain-line" d="M17 32c6-3 11-1 15 5 4-6 9-8 15-5" />
+              <path class="brain-line" d="M18 41c5-3 10-1 14 4 4-5 9-7 14-4" />
+              <path class="book-fold" d="M32 22v31" />
+            </svg>
+          </div>
+          <div>
+            <h1>BookWords</h1>
+            <p>Слова из книг</p>
+          </div>
+        </div>
+
+        <form id="collectionForm" class="new-collection">
+          <label for="collectionName">Новая книга</label>
+          <div class="inline-form">
+            <input id="collectionName" type="text" placeholder="Например: The Hobbit" autocomplete="off" />
+            <button type="submit" title="Добавить книгу">+</button>
+          </div>
+        </form>
+
+        <nav id="collectionList" class="collection-list" aria-label="Список книг"></nav>
+      </aside>
+
+      <main class="main">
+        <section class="topbar">
+          <div>
+            <p class="eyebrow">Личный словарь</p>
+            <div class="title-line">
+              <h2 id="activeTitle">Выберите книгу</h2>
+              <div id="starBank" class="star-bank" aria-label="Звезды за занятия"></div>
+            </div>
+          </div>
+          <div class="stats">
+            <div>
+              <strong id="totalWords">0</strong>
+              <span>слов</span>
+            </div>
+            <div>
+              <strong id="knownWords">0</strong>
+              <span>знаю</span>
+            </div>
+            <div>
+              <strong id="dueWords">0</strong>
+              <span>к повтору</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="emptyState" class="empty-state">
+          <div class="empty-visual">
+            <span>book</span>
+          </div>
+          <h2>Создай первую книгу</h2>
+          <p>Добавляй слова по мере чтения, а приложение будет превращать их в карточки и тренировки.</p>
+        </section>
+
+        <section id="workspace" class="workspace hidden">
+          <div class="panel add-panel">
+            <div class="panel-heading">
+              <h3>Добавить слово</h3>
+              <button id="sampleButton" class="ghost-button" type="button">Пример</button>
+            </div>
+            <form id="wordForm" class="word-form">
+              <input id="wordEnglish" type="text" placeholder="English word" autocomplete="off" required />
+              <div class="translation-field">
+                <input id="wordRussian" type="text" placeholder="Перевод" autocomplete="off" required />
+                <div id="translationSuggestions" class="suggestions hidden" role="listbox"></div>
+              </div>
+              <input id="wordExample" type="text" placeholder="Пример из книги" autocomplete="off" />
+              <div id="generatedPreview" class="generated-preview" aria-live="polite"></div>
+              <button type="submit">Добавить</button>
+            </form>
+          </div>
+
+          <div class="study-strip">
+            <label class="search-box">
+              <span>Поиск</span>
+              <input id="wordSearch" type="search" placeholder="Слово, перевод или пример" autocomplete="off" />
+            </label>
+            <div class="filter-group" aria-label="Фильтр слов">
+              <button class="filter-button active" data-filter="all" type="button">Все</button>
+              <button class="filter-button" data-filter="due" type="button">К повтору</button>
+              <button class="filter-button" data-filter="new" type="button">Новые</button>
+              <button class="filter-button" data-filter="known" type="button">Знаю</button>
+            </div>
+            <div class="goal-card">
+              <div>
+                <span>Цель дня</span>
+                <strong id="dailyProgress">0 / 10</strong>
+              </div>
+              <div class="goal-track"><span id="dailyProgressBar"></span></div>
+            </div>
+            <div class="data-actions">
+              <button id="installButton" class="ghost-button install-button hidden" type="button">Установить</button>
+              <button id="exportButton" class="ghost-button" type="button">Экспорт</button>
+              <button id="importButton" class="ghost-button" type="button">Импорт</button>
+              <input id="importFile" class="file-input" type="file" accept="application/json,.json" />
+            </div>
+          </div>
+
+          <div class="tabs" role="tablist">
+            <button class="tab active" data-tab="today" type="button">Сегодня</button>
+            <button class="tab" data-tab="words" type="button">Слова</button>
+            <button class="tab" data-tab="cards" type="button">Карточки</button>
+            <button class="tab" data-tab="quiz" type="button">Тесты</button>
+          </div>
+
+          <section id="todayView" class="view active">
+            <div id="todayDashboard" class="today-dashboard"></div>
+          </section>
+
+          <section id="wordsView" class="view">
+            <div id="wordList" class="word-list"></div>
+          </section>
+
+          <section id="cardsView" class="view">
+            <div class="flashcard-wrap">
+              <button id="prevCard" class="icon-button" type="button" title="Предыдущее слово">‹</button>
+              <article id="flashcard" class="flashcard"></article>
+              <button id="nextCard" class="icon-button" type="button" title="Следующее слово">›</button>
+            </div>
+          </section>
+
+          <section id="quizView" class="view">
+            <div class="quiz-layout">
+              <div class="quiz-controls">
+                <button class="mode-button active" data-mode="en-ru" type="button">
+                  <span>EN → RU</span>
+                  <small data-mode-progress="en-ru">0 / 10</small>
+                </button>
+                <button class="mode-button" data-mode="ru-en" type="button">
+                  <span>RU → EN</span>
+                  <small data-mode-progress="ru-en">0 / 10</small>
+                </button>
+                <button class="mode-button" data-mode="spell" type="button">
+                  <span>Правописание</span>
+                  <small data-mode-progress="spell">0 / 10</small>
+                </button>
+                <button class="mode-button" data-mode="listen" type="button">
+                  <span>На слух</span>
+                  <small data-mode-progress="listen">0 / 10</small>
+                </button>
+              </div>
+              <article id="quizCard" class="quiz-card"></article>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <template id="wordTemplate">
+      <article class="word-item">
+        <div class="word-thumb"></div>
+        <div class="word-copy">
+          <div class="word-row">
+            <h4></h4>
+            <span class="status-pill"></span>
+          </div>
+          <p class="translation"></p>
+          <p class="example"></p>
+        </div>
+        <div class="word-actions">
+          <button class="speak" type="button" title="Произнести">🔊</button>
+          <button class="bump" type="button" title="Отметить как знаю">✓</button>
+          <button class="forget" type="button" title="Повторять чаще">↺</button>
+          <button class="delete" type="button" title="Удалить">×</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">BookWords</title>
+  <desc id="desc">Открытая книга с линиями мозга</desc>
+  <rect width="512" height="512" rx="112" fill="#1f2933"/>
+  <path d="M88 142c67-34 124-17 168 39 44-56 101-73 168-39v250c-72-33-127-16-168 42-41-58-96-75-168-42V142z" fill="#fffaf0"/>
+  <path d="M256 181v253" fill="none" stroke="#1f2933" stroke-width="22" stroke-linecap="round"/>
+  <path d="M142 202c42-31 79-14 114 39 35-53 72-70 114-39" fill="none" stroke="#2f8f83" stroke-width="30" stroke-linecap="round"/>
+  <path d="M132 265c51-27 88-9 124 49 36-58 73-76 124-49" fill="none" stroke="#2f8f83" stroke-width="30" stroke-linecap="round"/>
+  <path d="M142 337c42-27 79-8 114 43 35-51 72-70 114-43" fill="none" stroke="#2f8f83" stroke-width="30" stroke-linecap="round"/>
+</svg>
