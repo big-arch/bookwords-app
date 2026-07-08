@@ -52,7 +52,7 @@ Each user stores one `data` JSON snapshot. Later this can be split into `books`,
 In the BookWords sidebar, paste:
 
 - Supabase project URL;
-- Supabase anon key;
+- Supabase public key: either the old `anon public key` or the new `Publishable key`;
 - email for login.
 
 In Supabase, also open:
@@ -72,6 +72,8 @@ Then click:
 4. Click `Синхронизировать`.
 
 Use the same Supabase settings and the same email on every computer and phone.
+
+Do not use `service_role` or `secret` keys in BookWords.
 
 ## Implementation Notes
 

@@ -390,8 +390,8 @@ function validateCloudSettings() {
     return "Supabase URL должен начинаться с https:// и быть похож на https://xxxxx.supabase.co";
   }
 
-  if (!key.startsWith("eyJ")) {
-    return "Похоже, это не anon public key. Нужен ключ anon/public, который обычно начинается с eyJ.";
+  if (!key.startsWith("eyJ") && !key.startsWith("sb_publishable_")) {
+    return "Похоже, это не публичный ключ Supabase. Нужен anon public key старого вида eyJ... или Publishable key нового вида sb_publishable_...";
   }
 
   return "";
