@@ -560,6 +560,45 @@ input:focus {
   grid-column: 1 / -1;
 }
 
+.cloud-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(31, 41, 51, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.cloud-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.cloud-heading span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cloud-panel input {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+.cloud-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cloud-actions .ghost-button {
+  min-height: 38px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .data-actions .ghost-button {
   min-height: 44px;
   padding: 0 13px;

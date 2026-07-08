@@ -4,6 +4,7 @@ const STREAK_KEY = "bookwords.streak.v1";
 const IMAGE_CACHE_KEY = "bookwords.imageCache.v1";
 const CLOUD_CONFIG_KEY = "bookwords.cloudConfig.v1";
 const SYNC_QUEUE_KEY = "bookwords.syncQueue.v1";
+const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
 const TRANSLATION_DEBOUNCE_MS = 450;
 const DAILY_GOAL = 10;
 const MAX_STARS = 7;
@@ -112,6 +113,14 @@ const els = {
   dailyProgressBar: document.querySelector("#dailyProgressBar"),
   todayDashboard: document.querySelector("#todayDashboard"),
   syncStatus: document.querySelector("#syncStatus"),
+  cloudUserLabel: document.querySelector("#cloudUserLabel"),
+  cloudUrl: document.querySelector("#cloudUrl"),
+  cloudAnonKey: document.querySelector("#cloudAnonKey"),
+  cloudEmail: document.querySelector("#cloudEmail"),
+  saveCloudButton: document.querySelector("#saveCloudButton"),
+  loginCloudButton: document.querySelector("#loginCloudButton"),
+  syncCloudButton: document.querySelector("#syncCloudButton"),
+  logoutCloudButton: document.querySelector("#logoutCloudButton"),
   installButton: document.querySelector("#installButton"),
   exportButton: document.querySelector("#exportButton"),
   importButton: document.querySelector("#importButton"),
@@ -160,8 +169,10 @@ function loadCloudConfig() {
     const parsed = saved ? JSON.parse(saved) : null;
     return {
       enabled: Boolean(parsed?.enabled),
-      provider: parsed?.provider || "local",
-      endpoint: parsed?.endpoint || "",
+      provider: parsed?.provider || "supabase",
+      supabaseUrl: parsed?.supabaseUrl || "",
+      supabaseAnonKey: parsed?.supabaseAnonKey || "",
+      email: parsed?.email || "",
       userId: parsed?.userId || "",
       lastSyncAt: parsed?.lastSyncAt || "",
       status: parsed?.status || "local"
@@ -169,8 +180,10 @@ function loadCloudConfig() {
   } catch {
     return {
       enabled: false,
-      provider: "local",
-      endpoint: "",
+      provider: "supabase",
+      supabaseUrl: "",
+      supabaseAnonKey: "",
+      email: "",
       userId: "",
       lastSyncAt: "",
       status: "local"
@@ -180,15 +193,27 @@ function loadCloudConfig() {
 
 var cloudConfig = loadCloudConfig();
 var syncTimer = null;
+var supabaseClient = null;
 
 function saveCloudConfig() {
   localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
 }
 
+function getLocalUpdatedAt() {
+  return localStorage.getItem(LOCAL_UPDATED_KEY) || "";
+}
+
+function markLocalUpdated() {
+  const timestamp = new Date().toISOString();
+  localStorage.setItem(LOCAL_UPDATED_KEY, timestamp);
+  return timestamp;
+}
+
 function createDataSnapshot() {
+  const updatedAt = getLocalUpdatedAt() || new Date().toISOString();
   return {
     version: 1,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
     state,
     dailyGoal,
     streak,
@@ -198,11 +223,15 @@ function createDataSnapshot() {
 
 function queueCloudSync(reason = "change") {
   if (!cloudConfig) return;
+  const updatedAt = markLocalUpdated();
 
   const queueItem = {
     reason,
     queuedAt: new Date().toISOString(),
-    snapshot: createDataSnapshot()
+    snapshot: {
+      ...createDataSnapshot(),
+      updatedAt
+    }
   };
 
   localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queueItem));
@@ -216,7 +245,7 @@ function scheduleCloudSync() {
 }
 
 async function syncNow() {
-  if (!cloudConfig.enabled) {
+  if (!cloudConfig.enabled || !supabaseClient) {
     renderSyncStatus();
     return;
   }
@@ -233,12 +262,13 @@ async function syncNow() {
 
   try {
     const payload = JSON.parse(queued);
-    await cloudStorageAdapter.push(payload.snapshot);
+    await cloudStorageAdapter.push(payload.snapshot || createDataSnapshot());
     localStorage.removeItem(SYNC_QUEUE_KEY);
     cloudConfig.status = "synced";
     cloudConfig.lastSyncAt = new Date().toISOString();
-  } catch {
+  } catch (error) {
     cloudConfig.status = "offline";
+    cloudConfig.lastError = error?.message || "Sync failed";
   }
 
   saveCloudConfig();
@@ -246,55 +276,241 @@ async function syncNow() {
 }
 
 const cloudStorageAdapter = {
-  async push(snapshot) {
-    if (!cloudConfig.endpoint) {
-      throw new Error("Cloud endpoint is not configured yet.");
+  getClient() {
+    if (supabaseClient) return supabaseClient;
+    if (!window.supabase?.createClient) {
+      throw new Error("Supabase library is not loaded.");
+    }
+    if (!cloudConfig.supabaseUrl || !cloudConfig.supabaseAnonKey) {
+      throw new Error("Supabase settings are empty.");
     }
 
-    const response = await fetch(cloudConfig.endpoint, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: cloudConfig.userId,
-        app: "BookWords",
-        snapshot
-      })
-    });
+    supabaseClient = window.supabase.createClient(cloudConfig.supabaseUrl, cloudConfig.supabaseAnonKey);
+    return supabaseClient;
+  },
 
-    if (!response.ok) throw new Error("Cloud sync failed.");
+  async getUser() {
+    const client = this.getClient();
+    const { data, error } = await client.auth.getUser();
+    if (error) throw error;
+    return data.user;
+  },
+
+  async push(snapshot) {
+    const client = this.getClient();
+    const user = await this.getUser();
+    if (!user) throw new Error("Sign in before syncing.");
+
+    const { error } = await client
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        updated_at: snapshot.updatedAt || new Date().toISOString(),
+        data: snapshot
+      });
+
+    if (error) throw error;
   },
 
   async pull() {
-    if (!cloudConfig.endpoint) {
-      throw new Error("Cloud endpoint is not configured yet.");
-    }
+    const client = this.getClient();
+    const user = await this.getUser();
+    if (!user) throw new Error("Sign in before loading cloud data.");
 
-    const url = new URL(cloudConfig.endpoint);
-    if (cloudConfig.userId) url.searchParams.set("userId", cloudConfig.userId);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Cloud load failed.");
-    return response.json();
+    const { data, error } = await client
+      .from("profiles")
+      .select("data, updated_at")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data?.data || null;
   }
 };
+
+function applyCloudSnapshot(snapshot) {
+  if (!snapshot?.state?.collections) return false;
+
+  state = snapshot.state;
+  dailyGoal = normalizeDailyGoal(snapshot.dailyGoal);
+  streak = snapshot.streak ? {
+    stars: Math.max(0, Math.min(MAX_STARS, Number(snapshot.streak.stars) || 0)),
+    lastStudyDate: snapshot.streak.lastStudyDate || "",
+    lastAwardDate: snapshot.streak.lastAwardDate || ""
+  } : loadStreak();
+  imageCache = snapshot.imageCache && typeof snapshot.imageCache === "object" ? snapshot.imageCache : {};
+  activeCollectionId = state.collections[0]?.id || null;
+  mixMode = false;
+  cardIndex = 0;
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(DAILY_GOAL_KEY, JSON.stringify(dailyGoal));
+  localStorage.setItem(STREAK_KEY, JSON.stringify(streak));
+  localStorage.setItem(IMAGE_CACHE_KEY, JSON.stringify(imageCache));
+  localStorage.setItem(LOCAL_UPDATED_KEY, snapshot.updatedAt || new Date().toISOString());
+  localStorage.removeItem(SYNC_QUEUE_KEY);
+  refreshGeneratedImages();
+  render();
+  return true;
+}
+
+function cloudIsConfigured() {
+  return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey);
+}
+
+function hydrateCloudForm() {
+  if (els.cloudUrl) els.cloudUrl.value = cloudConfig.supabaseUrl || "";
+  if (els.cloudAnonKey) els.cloudAnonKey.value = cloudConfig.supabaseAnonKey || "";
+  if (els.cloudEmail) els.cloudEmail.value = cloudConfig.email || "";
+}
+
+async function initCloud() {
+  hydrateCloudForm();
+  if (!cloudIsConfigured() || !window.supabase?.createClient) {
+    renderSyncStatus();
+    return;
+  }
+
+  try {
+    supabaseClient = window.supabase.createClient(cloudConfig.supabaseUrl, cloudConfig.supabaseAnonKey);
+    const { data } = await supabaseClient.auth.getSession();
+    const user = data.session?.user || null;
+    cloudConfig.enabled = Boolean(user);
+    cloudConfig.userId = user?.id || "";
+    cloudConfig.status = user ? "synced" : "local";
+    saveCloudConfig();
+
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      cloudConfig.enabled = Boolean(session?.user);
+      cloudConfig.userId = session?.user?.id || "";
+      cloudConfig.status = session?.user ? "synced" : "local";
+      saveCloudConfig();
+      renderSyncStatus();
+      if (session?.user) syncFromCloudThenPushLocal();
+    });
+
+    if (user) await syncFromCloudThenPushLocal();
+  } catch (error) {
+    cloudConfig.status = "offline";
+    cloudConfig.lastError = error?.message || "Cloud init failed";
+    saveCloudConfig();
+  }
+
+  renderSyncStatus();
+}
+
+async function saveCloudSettings() {
+  cloudConfig.supabaseUrl = els.cloudUrl.value.trim();
+  cloudConfig.supabaseAnonKey = els.cloudAnonKey.value.trim();
+  cloudConfig.email = els.cloudEmail.value.trim();
+  cloudConfig.provider = "supabase";
+  cloudConfig.status = cloudIsConfigured() ? "local" : "local";
+  supabaseClient = null;
+  saveCloudConfig();
+  await initCloud();
+  renderSyncStatus();
+}
+
+async function loginCloud() {
+  await saveCloudSettings();
+  if (!cloudIsConfigured()) {
+    alert("Заполни Supabase URL и anon key.");
+    return;
+  }
+
+  const email = els.cloudEmail.value.trim();
+  if (!email) {
+    alert("Введи email для входа.");
+    return;
+  }
+
+  try {
+    const client = cloudStorageAdapter.getClient();
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.href
+      }
+    });
+    if (error) throw error;
+    cloudConfig.email = email;
+    cloudConfig.status = "login-sent";
+    saveCloudConfig();
+    renderSyncStatus();
+    alert("Письмо для входа отправлено. Открой ссылку из письма на этом устройстве.");
+  } catch (error) {
+    cloudConfig.status = "offline";
+    cloudConfig.lastError = error?.message || "Login failed";
+    saveCloudConfig();
+    renderSyncStatus();
+    alert("Не удалось отправить письмо для входа. Проверь Supabase настройки.");
+  }
+}
+
+async function logoutCloud() {
+  try {
+    if (supabaseClient) await supabaseClient.auth.signOut();
+  } catch {
+    // Keep local data even if sign out fails.
+  }
+  cloudConfig.enabled = false;
+  cloudConfig.userId = "";
+  cloudConfig.status = "local";
+  saveCloudConfig();
+  renderSyncStatus();
+}
+
+function isCloudNewer(cloudSnapshot) {
+  if (!cloudSnapshot?.updatedAt) return false;
+  const localUpdatedAt = getLocalUpdatedAt();
+  if (!localUpdatedAt) return true;
+  return new Date(cloudSnapshot.updatedAt).getTime() > new Date(localUpdatedAt).getTime();
+}
+
+async function syncFromCloudThenPushLocal() {
+  if (!cloudConfig.enabled || !supabaseClient) return;
+
+  cloudConfig.status = "syncing";
+  saveCloudConfig();
+  renderSyncStatus();
+
+  try {
+    const cloudSnapshot = await cloudStorageAdapter.pull();
+    if (cloudSnapshot && isCloudNewer(cloudSnapshot)) {
+      applyCloudSnapshot(cloudSnapshot);
+    } else {
+      await cloudStorageAdapter.push(createDataSnapshot());
+      localStorage.removeItem(SYNC_QUEUE_KEY);
+    }
+
+    cloudConfig.status = "synced";
+    cloudConfig.lastSyncAt = new Date().toISOString();
+  } catch (error) {
+    cloudConfig.status = "offline";
+    cloudConfig.lastError = error?.message || "Sync failed";
+  }
+
+  saveCloudConfig();
+  renderSyncStatus();
+}
 
 function renderSyncStatus() {
   if (!els.syncStatus) return;
 
   const hasQueue = Boolean(localStorage.getItem(SYNC_QUEUE_KEY));
-  if (!cloudConfig.enabled) {
-    els.syncStatus.textContent = "Облако: подготовлено";
-    els.syncStatus.title = "Сейчас данные хранятся на этом устройстве. Подключение облака уже заложено в код.";
-    return;
-  }
-
   const labels = {
     syncing: "Облако: синхронизация",
     synced: "Облако: сохранено",
     offline: "Облако: ждёт сеть",
-    local: "Облако: включено"
+    local: cloudIsConfigured() ? "Облако: настрой вход" : "Облако: настрой",
+    "login-sent": "Облако: проверь почту"
   };
-  els.syncStatus.textContent = hasQueue && cloudConfig.status !== "syncing" ? "Облако: есть изменения" : labels[cloudConfig.status] || labels.local;
-  els.syncStatus.title = cloudConfig.lastSyncAt ? `Последняя синхронизация: ${cloudConfig.lastSyncAt}` : "Облачная синхронизация готова к подключению.";
+  els.syncStatus.textContent = hasQueue && cloudConfig.enabled && cloudConfig.status !== "syncing" ? "Облако: есть изменения" : labels[cloudConfig.status] || labels.local;
+  els.syncStatus.title = cloudConfig.lastError || (cloudConfig.lastSyncAt ? `Последняя синхронизация: ${cloudConfig.lastSyncAt}` : "Supabase синхронизация.");
+
+  if (els.cloudUserLabel) {
+    els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : cloudIsConfigured() ? "нужен вход" : "не подключено";
+  }
 }
 
 function loadState() {
@@ -1727,6 +1943,10 @@ els.wordSearch.addEventListener("input", () => {
 els.exportButton.addEventListener("click", exportBackup);
 els.importButton.addEventListener("click", () => els.importFile.click());
 els.importFile.addEventListener("change", () => importBackup(els.importFile.files[0]));
+els.saveCloudButton?.addEventListener("click", saveCloudSettings);
+els.loginCloudButton?.addEventListener("click", loginCloud);
+els.syncCloudButton?.addEventListener("click", syncFromCloudThenPushLocal);
+els.logoutCloudButton?.addEventListener("click", logoutCloud);
 els.installButton?.addEventListener("click", async () => {
   if (!deferredInstallPrompt) return;
 
@@ -1785,3 +2005,4 @@ els.nextCard.addEventListener("click", () => {
 render();
 renderGeneratedPreview();
 registerPwa();
+initCloud();

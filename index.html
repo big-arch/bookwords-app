@@ -13,7 +13,7 @@
     <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
     <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=bd11c46" />
+    <link rel="stylesheet" href="styles.css?v=cloud-sync-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -48,6 +48,22 @@
           <button id="importButton" class="ghost-button" type="button">Импорт</button>
           <input id="importFile" class="file-input" type="file" accept="application/json,.json" />
         </div>
+
+        <section class="cloud-panel" aria-label="Облачная синхронизация">
+          <div class="cloud-heading">
+            <strong>Облако</strong>
+            <span id="cloudUserLabel">не подключено</span>
+          </div>
+          <input id="cloudUrl" type="url" placeholder="Supabase URL" autocomplete="off" />
+          <input id="cloudAnonKey" type="password" placeholder="Supabase anon key" autocomplete="off" />
+          <input id="cloudEmail" type="email" placeholder="Email для входа" autocomplete="email" />
+          <div class="cloud-actions">
+            <button id="saveCloudButton" class="ghost-button" type="button">Сохранить</button>
+            <button id="loginCloudButton" class="ghost-button" type="button">Войти</button>
+            <button id="syncCloudButton" class="ghost-button" type="button">Синхронизировать</button>
+            <button id="logoutCloudButton" class="ghost-button" type="button">Выйти</button>
+          </div>
+        </section>
 
         <nav id="collectionList" class="collection-list" aria-label="Список книг"></nav>
 
@@ -194,6 +210,7 @@
       </article>
     </template>
 
-    <script src="script.js?v=bd11c46"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="script.js?v=cloud-sync-1"></script>
   </body>
 </html>
