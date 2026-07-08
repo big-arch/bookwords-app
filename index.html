@@ -42,6 +42,13 @@
           </div>
         </form>
 
+        <div class="data-actions sidebar-actions">
+          <button id="installButton" class="ghost-button install-button hidden" type="button">Установить</button>
+          <button id="exportButton" class="ghost-button" type="button">Экспорт</button>
+          <button id="importButton" class="ghost-button" type="button">Импорт</button>
+          <input id="importFile" class="file-input" type="file" accept="application/json,.json" />
+        </div>
+
         <nav id="collectionList" class="collection-list" aria-label="Список книг"></nav>
 
         <div id="syncStatus" class="sync-status" title="Облачная синхронизация готова к подключению.">Облако: подготовлено</div>
@@ -84,7 +91,6 @@
           <div class="panel add-panel">
             <div class="panel-heading">
               <h3>Добавить слово</h3>
-              <button id="sampleButton" class="ghost-button" type="button">Пример</button>
             </div>
             <form id="wordForm" class="word-form">
               <input id="wordEnglish" type="text" placeholder="English word" autocomplete="off" required />
@@ -115,12 +121,6 @@
                 <strong id="dailyProgress">0 / 10</strong>
               </div>
               <div class="goal-track"><span id="dailyProgressBar"></span></div>
-            </div>
-            <div class="data-actions">
-              <button id="installButton" class="ghost-button install-button hidden" type="button">Установить</button>
-              <button id="exportButton" class="ghost-button" type="button">Экспорт</button>
-              <button id="importButton" class="ghost-button" type="button">Импорт</button>
-              <input id="importFile" class="file-input" type="file" accept="application/json,.json" />
             </div>
           </div>
 

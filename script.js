@@ -118,7 +118,6 @@ const els = {
   importFile: document.querySelector("#importFile"),
   wordList: document.querySelector("#wordList"),
   wordTemplate: document.querySelector("#wordTemplate"),
-  sampleButton: document.querySelector("#sampleButton"),
   flashcard: document.querySelector("#flashcard"),
   prevCard: document.querySelector("#prevCard"),
   nextCard: document.querySelector("#nextCard"),
@@ -1693,13 +1692,6 @@ els.wordForm.addEventListener("submit", (event) => {
   renderGeneratedPreview();
   saveState();
   render();
-});
-
-els.sampleButton.addEventListener("click", () => {
-  els.wordEnglish.value = "glimpse";
-  els.wordRussian.value = "мимолетный взгляд";
-  els.wordExample.value = "She caught a glimpse of the old house through the trees.";
-  renderGeneratedPreview();
 });
 
 els.wordEnglish.addEventListener("input", () => {
