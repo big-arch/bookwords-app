@@ -1932,6 +1932,49 @@ async function syncFromCloudThenPushLocal() {
   renderSyncStatus();
 }
 
+async function manualCloudSync() {
+  const validationError = validateCloudSettings();
+  if (validationError) {
+    alert(validationError);
+    return;
+  }
+
+  await saveCloudSettings();
+
+  try {
+    const client = cloudStorageAdapter.getClient();
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+
+    const user = data.session?.user || null;
+    if (!user) {
+      cloudConfig.enabled = false;
+      cloudConfig.userId = "";
+      cloudConfig.status = "local";
+      saveCloudConfig();
+      renderSyncStatus();
+      alert("Сначала войди через письмо Supabase. Нажми 'Войти', открой письмо и перейди по ссылке, потом вернись и нажми 'Синхронизировать'.");
+      return;
+    }
+
+    cloudConfig.enabled = true;
+    cloudConfig.userId = user.id;
+    await syncFromCloudThenPushLocal();
+
+    if (cloudConfig.status === "synced") {
+      alert("Синхронизация готова. Книги и слова сохранены в облаке.");
+    } else if (cloudConfig.lastError) {
+      alert(`Синхронизация не прошла.\n\nОшибка: ${cloudConfig.lastError}`);
+    }
+  } catch (error) {
+    cloudConfig.status = "offline";
+    cloudConfig.lastError = error?.message || "Manual sync failed";
+    saveCloudConfig();
+    renderSyncStatus();
+    alert(`Синхронизация не прошла.\n\nОшибка: ${cloudConfig.lastError}`);
+  }
+}
+
 function renderSyncStatus() {
   if (!els.syncStatus) return;
 
@@ -3383,7 +3426,7 @@ els.importButton.addEventListener("click", () => els.importFile.click());
 els.importFile.addEventListener("change", () => importBackup(els.importFile.files[0]));
 els.saveCloudButton?.addEventListener("click", saveCloudSettings);
 els.loginCloudButton?.addEventListener("click", loginCloud);
-els.syncCloudButton?.addEventListener("click", syncFromCloudThenPushLocal);
+els.syncCloudButton?.addEventListener("click", manualCloudSync);
 els.logoutCloudButton?.addEventListener("click", logoutCloud);
 els.installButton?.addEventListener("click", async () => {
   if (!deferredInstallPrompt) return;
