@@ -2,6 +2,8 @@ const STORAGE_KEY = "bookwords.v1";
 const DAILY_GOAL_KEY = "bookwords.dailyGoal.v1";
 const STREAK_KEY = "bookwords.streak.v1";
 const IMAGE_CACHE_KEY = "bookwords.imageCache.v1";
+const CLOUD_CONFIG_KEY = "bookwords.cloudConfig.v1";
+const SYNC_QUEUE_KEY = "bookwords.syncQueue.v1";
 const TRANSLATION_DEBOUNCE_MS = 450;
 const DAILY_GOAL = 10;
 const MAX_STARS = 7;
@@ -109,6 +111,7 @@ const els = {
   dailyProgress: document.querySelector("#dailyProgress"),
   dailyProgressBar: document.querySelector("#dailyProgressBar"),
   todayDashboard: document.querySelector("#todayDashboard"),
+  syncStatus: document.querySelector("#syncStatus"),
   installButton: document.querySelector("#installButton"),
   exportButton: document.querySelector("#exportButton"),
   importButton: document.querySelector("#importButton"),
@@ -141,6 +144,150 @@ function registerPwa() {
   });
 }
 
+function loadCloudConfig() {
+  const saved = localStorage.getItem(CLOUD_CONFIG_KEY);
+
+  try {
+    const parsed = saved ? JSON.parse(saved) : null;
+    return {
+      enabled: Boolean(parsed?.enabled),
+      provider: parsed?.provider || "local",
+      endpoint: parsed?.endpoint || "",
+      userId: parsed?.userId || "",
+      lastSyncAt: parsed?.lastSyncAt || "",
+      status: parsed?.status || "local"
+    };
+  } catch {
+    return {
+      enabled: false,
+      provider: "local",
+      endpoint: "",
+      userId: "",
+      lastSyncAt: "",
+      status: "local"
+    };
+  }
+}
+
+var cloudConfig = loadCloudConfig();
+var syncTimer = null;
+
+function saveCloudConfig() {
+  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+}
+
+function createDataSnapshot() {
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    state,
+    dailyGoal,
+    streak,
+    imageCache
+  };
+}
+
+function queueCloudSync(reason = "change") {
+  if (!cloudConfig) return;
+
+  const queueItem = {
+    reason,
+    queuedAt: new Date().toISOString(),
+    snapshot: createDataSnapshot()
+  };
+
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queueItem));
+  scheduleCloudSync();
+  renderSyncStatus();
+}
+
+function scheduleCloudSync() {
+  window.clearTimeout(syncTimer);
+  syncTimer = window.setTimeout(syncNow, 800);
+}
+
+async function syncNow() {
+  if (!cloudConfig.enabled) {
+    renderSyncStatus();
+    return;
+  }
+
+  const queued = localStorage.getItem(SYNC_QUEUE_KEY);
+  if (!queued) {
+    renderSyncStatus();
+    return;
+  }
+
+  cloudConfig.status = "syncing";
+  saveCloudConfig();
+  renderSyncStatus();
+
+  try {
+    const payload = JSON.parse(queued);
+    await cloudStorageAdapter.push(payload.snapshot);
+    localStorage.removeItem(SYNC_QUEUE_KEY);
+    cloudConfig.status = "synced";
+    cloudConfig.lastSyncAt = new Date().toISOString();
+  } catch {
+    cloudConfig.status = "offline";
+  }
+
+  saveCloudConfig();
+  renderSyncStatus();
+}
+
+const cloudStorageAdapter = {
+  async push(snapshot) {
+    if (!cloudConfig.endpoint) {
+      throw new Error("Cloud endpoint is not configured yet.");
+    }
+
+    const response = await fetch(cloudConfig.endpoint, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: cloudConfig.userId,
+        app: "BookWords",
+        snapshot
+      })
+    });
+
+    if (!response.ok) throw new Error("Cloud sync failed.");
+  },
+
+  async pull() {
+    if (!cloudConfig.endpoint) {
+      throw new Error("Cloud endpoint is not configured yet.");
+    }
+
+    const url = new URL(cloudConfig.endpoint);
+    if (cloudConfig.userId) url.searchParams.set("userId", cloudConfig.userId);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Cloud load failed.");
+    return response.json();
+  }
+};
+
+function renderSyncStatus() {
+  if (!els.syncStatus) return;
+
+  const hasQueue = Boolean(localStorage.getItem(SYNC_QUEUE_KEY));
+  if (!cloudConfig.enabled) {
+    els.syncStatus.textContent = "Облако: подготовлено";
+    els.syncStatus.title = "Сейчас данные хранятся на этом устройстве. Подключение облака уже заложено в код.";
+    return;
+  }
+
+  const labels = {
+    syncing: "Облако: синхронизация",
+    synced: "Облако: сохранено",
+    offline: "Облако: ждёт сеть",
+    local: "Облако: включено"
+  };
+  els.syncStatus.textContent = hasQueue && cloudConfig.status !== "syncing" ? "Облако: есть изменения" : labels[cloudConfig.status] || labels.local;
+  els.syncStatus.title = cloudConfig.lastSyncAt ? `Последняя синхронизация: ${cloudConfig.lastSyncAt}` : "Облачная синхронизация готова к подключению.";
+}
+
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return sampleData;
@@ -166,6 +313,7 @@ function loadImageCache() {
 
 function saveImageCache() {
   localStorage.setItem(IMAGE_CACHE_KEY, JSON.stringify(imageCache));
+  queueCloudSync("image-cache");
 }
 
 function getTodayKey() {
@@ -236,10 +384,12 @@ function loadStreak() {
 
 function saveDailyGoal() {
   localStorage.setItem(DAILY_GOAL_KEY, JSON.stringify(dailyGoal));
+  queueCloudSync("daily-goal");
 }
 
 function saveStreak() {
   localStorage.setItem(STREAK_KEY, JSON.stringify(streak));
+  queueCloudSync("streak");
 }
 
 function getModeProgress(mode) {
@@ -331,6 +481,7 @@ function launchStarBurst() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  queueCloudSync("state");
 }
 
 function getActiveCollection() {
@@ -965,9 +1116,12 @@ function renderCollections() {
   }
 
   state.collections.forEach((collection) => {
+    const item = document.createElement("div");
+    item.className = `collection-item ${!mixMode && collection.id === activeCollectionId ? "active" : ""}`;
+
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `collection-button ${!mixMode && collection.id === activeCollectionId ? "active" : ""}`;
+    button.className = "collection-button";
     button.innerHTML = `
       <span>
         <strong>${escapeHtml(collection.name)}</strong>
@@ -981,7 +1135,20 @@ function renderCollections() {
       cardIndex = 0;
       render();
     });
-    els.collectionList.append(button);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "collection-delete";
+    deleteButton.textContent = "×";
+    deleteButton.title = `Удалить книгу ${collection.name}`;
+    deleteButton.setAttribute("aria-label", `Удалить книгу ${collection.name}`);
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteCollection(collection.id);
+    });
+
+    item.append(button, deleteButton);
+    els.collectionList.append(item);
   });
 }
 
@@ -1301,8 +1468,45 @@ function checkAnswer(value, answer) {
 
 function deleteWord(collection, wordId) {
   collection.words = collection.words.filter((word) => word.id !== wordId);
+  pruneDailyGoalProgress();
   saveState();
+  saveDailyGoal();
   render();
+}
+
+function deleteCollection(collectionId) {
+  const collection = state.collections.find((item) => item.id === collectionId);
+  if (!collection) return;
+
+  const wordLabel = collection.words.length === 1 ? "1 слово" : `${collection.words.length} слов`;
+  const confirmed = window.confirm(`Удалить книгу "${collection.name}" и все её слова (${wordLabel})?`);
+  if (!confirmed) return;
+
+  state.collections = state.collections.filter((item) => item.id !== collectionId);
+  pruneDailyGoalProgress();
+
+  if (activeCollectionId === collectionId) {
+    activeCollectionId = state.collections[0]?.id || null;
+    cardIndex = 0;
+  }
+
+  if (state.collections.length <= 2) {
+    mixMode = false;
+  }
+
+  saveState();
+  saveDailyGoal();
+  render();
+}
+
+function pruneDailyGoalProgress() {
+  const existingWordIds = new Set(state.collections.flatMap((collection) => collection.words.map((word) => word.id)));
+
+  QUIZ_MODES.forEach((mode) => {
+    dailyGoal.modes[mode] = (dailyGoal.modes[mode] || []).filter((wordId) => existingWordIds.has(wordId));
+  });
+
+  dailyGoal.completed = isDailyGoalComplete();
 }
 
 function escapeHtml(value) {
@@ -1411,6 +1615,7 @@ function render() {
   renderTopbar(collection);
   renderDailyGoal();
   renderStars();
+  renderSyncStatus();
 
   if (!collection) return;
   renderToday(collection);

@@ -166,7 +166,16 @@ input:focus {
   gap: 8px;
 }
 
+.collection-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border-radius: 8px;
+}
+
 .collection-button {
+  width: 100%;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -178,10 +187,34 @@ input:focus {
   text-align: left;
 }
 
+.collection-item.active,
 .collection-button:hover,
 .collection-button.active {
   background: #ffffff;
   box-shadow: 0 10px 25px rgba(31, 41, 51, 0.08);
+}
+
+.collection-item.active .collection-button {
+  background: transparent;
+  box-shadow: none;
+}
+
+.collection-delete {
+  width: 34px;
+  min-height: 34px;
+  margin-right: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.collection-delete:hover {
+  border-color: rgba(182, 70, 58, 0.22);
+  background: rgba(182, 70, 58, 0.08);
+  color: #9f3d32;
 }
 
 .mix-button {
@@ -199,6 +232,17 @@ input:focus {
 .collection-button span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.sync-status {
+  margin-top: auto;
+  padding: 11px 12px;
+  border: 1px solid rgba(47, 143, 131, 0.16);
+  border-radius: 8px;
+  background: rgba(47, 143, 131, 0.08);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .main {
