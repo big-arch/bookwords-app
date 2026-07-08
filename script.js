@@ -137,7 +137,17 @@ function registerPwa() {
   if (!("serviceWorker" in navigator)) return;
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    let refreshing = false;
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    navigator.serviceWorker.register("./sw.js").then((registration) => {
+      registration.update();
+    }).catch(() => {
       // PWA is an upgrade path; the app should still work if registration is blocked.
     });
   });
