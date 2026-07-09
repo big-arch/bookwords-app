@@ -1456,9 +1456,12 @@ const IMAGE_CACHE_KEY = "bookwords.imageCache.v1";
 const CLOUD_CONFIG_KEY = "bookwords.cloudConfig.v1";
 const SYNC_QUEUE_KEY = "bookwords.syncQueue.v1";
 const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
+const CLOUD_LOGIN_NEXT_AT_KEY = "bookwords.cloudLoginNextAt.v1";
 const DEFAULT_SUPABASE_URL = "https://renbakjudvdnkjvjujti.supabase.co";
 const DEFAULT_SUPABASE_PUBLIC_KEY = "sb_publishable_tJ2cQXwiFEv-1r6wHRwndg_5hEN-h4C";
 const TRANSLATION_DEBOUNCE_MS = 450;
+const CLOUD_LOGIN_COOLDOWN_MS = 120000;
+const CLOUD_RATE_LIMIT_COOLDOWN_MS = 600000;
 const DAILY_GOAL = 10;
 const MAX_STARS = 7;
 const AI_IMAGE_ENDPOINT = "https://image.pollinations.ai/prompt/";
@@ -1941,13 +1944,33 @@ async function saveCloudSettings() {
 function setCloudBusy(isBusy) {
   [
     els.saveCloudButton,
-    els.loginCloudButton,
     els.verifyCloudButton,
     els.syncCloudButton,
     els.logoutCloudButton
   ].forEach((button) => {
     if (button) button.disabled = isBusy;
   });
+
+  if (els.loginCloudButton) {
+    els.loginCloudButton.disabled = isBusy || getCloudLoginWaitSeconds() > 0;
+  }
+}
+
+function getCloudLoginWaitSeconds() {
+  const nextAt = Number(localStorage.getItem(CLOUD_LOGIN_NEXT_AT_KEY) || 0);
+  return Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+}
+
+function setCloudLoginCooldown(durationMs = CLOUD_LOGIN_COOLDOWN_MS) {
+  localStorage.setItem(CLOUD_LOGIN_NEXT_AT_KEY, String(Date.now() + durationMs));
+}
+
+function clearCloudLoginCooldown() {
+  localStorage.removeItem(CLOUD_LOGIN_NEXT_AT_KEY);
+}
+
+function isSupabaseRateLimit(error) {
+  return String(error?.message || "").toLowerCase().includes("rate limit");
 }
 
 async function loginCloud() {
@@ -1965,6 +1988,13 @@ async function loginCloud() {
     return;
   }
 
+  const waitSeconds = getCloudLoginWaitSeconds();
+  if (waitSeconds > 0) {
+    alert(`Код уже запрошен. Подожди примерно ${Math.ceil(waitSeconds / 60)} мин. или проверь письмо, которое уже пришло.`);
+    renderSyncStatus();
+    return;
+  }
+
   try {
     setCloudBusy(true);
     const client = cloudStorageAdapter.getClient();
@@ -1977,15 +2007,24 @@ async function loginCloud() {
     if (error) throw error;
     cloudConfig.email = email;
     cloudConfig.status = "login-sent";
+    setCloudLoginCooldown();
     saveCloudConfig();
     renderSyncStatus();
     alert("Код отправлен на email. Введи его здесь и нажми «Подтвердить».");
   } catch (error) {
-    cloudConfig.status = "offline";
-    cloudConfig.lastError = error?.message || "Login failed";
+    const rateLimited = isSupabaseRateLimit(error);
+    cloudConfig.status = rateLimited ? "rate-limited" : "offline";
+    cloudConfig.lastError = rateLimited
+      ? "Слишком много запросов кода. Подожди несколько минут и не нажимай отправку повторно."
+      : error?.message || "Login failed";
+    if (rateLimited) setCloudLoginCooldown(CLOUD_RATE_LIMIT_COOLDOWN_MS);
     saveCloudConfig();
     renderSyncStatus();
-    alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase: Authentication -> URL Configuration -> Redirect URLs. Там должен быть адрес ${getAppBaseUrl()}`);
+    if (rateLimited) {
+      alert("Supabase временно ограничил отправку писем. Подожди несколько минут и проверь почту: возможно, предыдущий код уже пришёл.");
+    } else {
+      alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase: Authentication -> URL Configuration -> Redirect URLs. Там должен быть адрес ${getAppBaseUrl()}`);
+    }
   } finally {
     setCloudBusy(false);
   }
@@ -2021,6 +2060,7 @@ async function verifyCloudCode() {
     cloudConfig.userId = result.data?.user?.id || cloudConfig.userId;
     cloudConfig.status = "synced";
     if (els.cloudOtp) els.cloudOtp.value = "";
+    clearCloudLoginCooldown();
     saveCloudConfig();
     renderSyncStatus();
     await syncFromCloudThenPushLocal();
@@ -2138,14 +2178,15 @@ function renderSyncStatus() {
     synced: "Сохранено в облаке",
     offline: "Облако ждёт сеть",
     local: cloudIsConfigured() ? "Войди для синхронизации" : "Настрой облако",
-    "login-sent": "Проверь почту"
+    "login-sent": "Проверь почту",
+    "rate-limited": "Подожди перед новым кодом"
   };
   const statusText = hasQueue && cloudConfig.enabled && cloudConfig.status !== "syncing" ? "Есть несохранённые изменения" : labels[cloudConfig.status] || labels.local;
   els.syncStatus.textContent = statusText;
   els.syncStatus.title = cloudConfig.lastError || (cloudConfig.lastSyncAt ? `Последняя синхронизация: ${cloudConfig.lastSyncAt}` : "Supabase синхронизация.");
 
   if (els.cloudUserLabel) {
-    els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : cloudConfig.status === "login-sent" ? "код отправлен" : "не подключено";
+    els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : cloudConfig.status === "login-sent" ? "код отправлен" : cloudConfig.status === "rate-limited" ? "пауза" : "не подключено";
   }
 
   if (els.cloudStatusText) {
@@ -2153,7 +2194,15 @@ function renderSyncStatus() {
       ? cloudConfig.email || "Слова доступны на всех устройствах"
       : cloudConfig.status === "login-sent"
         ? "Введи код из письма"
-        : "Войди один раз на каждом устройстве";
+        : cloudConfig.status === "rate-limited"
+          ? "Подожди несколько минут"
+          : "Войди один раз на каждом устройстве";
+  }
+
+  const waitSeconds = getCloudLoginWaitSeconds();
+  if (els.loginCloudButton) {
+    els.loginCloudButton.disabled = waitSeconds > 0 || cloudConfig.userId;
+    els.loginCloudButton.textContent = waitSeconds > 0 ? `Повтор через ${Math.ceil(waitSeconds / 60)} мин` : "Отправить код";
   }
 }
 
@@ -3651,6 +3700,7 @@ render();
 renderGeneratedPreview();
 registerPwa();
 initCloud();
+window.setInterval(renderSyncStatus, 30000);
 
 </script>
   </body>
