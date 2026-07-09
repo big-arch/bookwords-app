@@ -616,6 +616,19 @@ input:focus {
   font-size: 12px;
 }
 
+.safari-bridge {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  border: 1px solid rgba(47, 143, 131, 0.24);
+  border-radius: 8px;
+  background: rgba(47, 143, 131, 0.1);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .cloud-actions .ghost-button:disabled,
 .cloud-advanced .ghost-button:disabled {
   cursor: wait;
