@@ -1,0 +1,8 @@
+{
+  "version": "2026-07-09-v19",
+  "features": [
+    "device-sync-key",
+    "sidebar-sync-button",
+    "pastel-study-cards"
+  ]
+}
