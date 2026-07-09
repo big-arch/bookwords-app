@@ -66,10 +66,10 @@ Set:
 
 Then click:
 
-1. `Сохранить`
-2. `Войти`
-3. Open the email login link on the same device.
-4. Click `Синхронизировать`.
+1. `Получить ссылку`
+2. Open the email login link on the same device.
+3. BookWords completes login automatically and starts sync.
+4. Use `Синхронизировать` only for a manual refresh.
 
 Use the same Supabase settings and the same email on every computer and phone.
 

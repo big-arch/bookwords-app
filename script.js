@@ -123,10 +123,8 @@ const els = {
   cloudUrl: document.querySelector("#cloudUrl"),
   cloudAnonKey: document.querySelector("#cloudAnonKey"),
   cloudEmail: document.querySelector("#cloudEmail"),
-  cloudOtp: document.querySelector("#cloudOtp"),
   saveCloudButton: document.querySelector("#saveCloudButton"),
   loginCloudButton: document.querySelector("#loginCloudButton"),
-  verifyCloudButton: document.querySelector("#verifyCloudButton"),
   syncCloudButton: document.querySelector("#syncCloudButton"),
   logoutCloudButton: document.querySelector("#logoutCloudButton"),
   installButton: document.querySelector("#installButton"),
@@ -401,13 +399,15 @@ function createCloudClient() {
 async function completeCloudLoginFromUrl(client) {
   const url = new URL(window.location.href);
   const code = url.searchParams.get("code");
-  if (!code) return;
+  if (!code) return false;
 
   const { error } = await client.auth.exchangeCodeForSession(code);
   if (error) throw error;
 
   url.searchParams.delete("code");
   window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+  clearCloudLoginCooldown();
+  return true;
 }
 
 function validateCloudSettings() {
@@ -450,7 +450,7 @@ async function initCloud() {
 
   try {
     supabaseClient = createCloudClient();
-    await completeCloudLoginFromUrl(supabaseClient);
+    const completedLogin = await completeCloudLoginFromUrl(supabaseClient);
     const { data } = await supabaseClient.auth.getSession();
     const user = data.session?.user || null;
     cloudConfig.enabled = Boolean(user);
@@ -467,7 +467,12 @@ async function initCloud() {
       if (session?.user) syncFromCloudThenPushLocal();
     });
 
-    if (user) await syncFromCloudThenPushLocal();
+    if (user) {
+      await syncFromCloudThenPushLocal();
+      if (completedLogin) {
+        window.setTimeout(() => alert("Облако подключено. Слова синхронизируются автоматически."), 250);
+      }
+    }
   } catch (error) {
     cloudConfig.status = "offline";
     cloudConfig.lastError = error?.message || "Cloud init failed";
@@ -493,7 +498,6 @@ async function saveCloudSettings() {
 function setCloudBusy(isBusy) {
   [
     els.saveCloudButton,
-    els.verifyCloudButton,
     els.syncCloudButton,
     els.logoutCloudButton
   ].forEach((button) => {
@@ -539,7 +543,7 @@ async function loginCloud() {
 
   const waitSeconds = getCloudLoginWaitSeconds();
   if (waitSeconds > 0) {
-    alert(`Код уже запрошен. Подожди примерно ${Math.ceil(waitSeconds / 60)} мин. или проверь письмо, которое уже пришло.`);
+    alert(`Ссылка уже запрошена. Подожди примерно ${Math.ceil(waitSeconds / 60)} мин. или открой письмо, которое уже пришло.`);
     renderSyncStatus();
     return;
   }
@@ -559,67 +563,21 @@ async function loginCloud() {
     setCloudLoginCooldown();
     saveCloudConfig();
     renderSyncStatus();
-    alert("Код отправлен на email. Введи его здесь и нажми «Подтвердить».");
+    alert("Письмо отправлено. Открой ссылку из письма на этом устройстве, и приложение подключится само.");
   } catch (error) {
     const rateLimited = isSupabaseRateLimit(error);
     cloudConfig.status = rateLimited ? "rate-limited" : "offline";
     cloudConfig.lastError = rateLimited
-      ? "Слишком много запросов кода. Подожди несколько минут и не нажимай отправку повторно."
+      ? "Слишком много запросов ссылки. Подожди несколько минут и не нажимай отправку повторно."
       : error?.message || "Login failed";
     if (rateLimited) setCloudLoginCooldown(CLOUD_RATE_LIMIT_COOLDOWN_MS);
     saveCloudConfig();
     renderSyncStatus();
     if (rateLimited) {
-      alert("Supabase временно ограничил отправку писем. Подожди несколько минут и проверь почту: возможно, предыдущий код уже пришёл.");
+      alert("Supabase временно ограничил отправку писем. Подожди несколько минут и проверь почту: возможно, предыдущая ссылка уже пришла.");
     } else {
       alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase: Authentication -> URL Configuration -> Redirect URLs. Там должен быть адрес ${getAppBaseUrl()}`);
     }
-  } finally {
-    setCloudBusy(false);
-  }
-}
-
-async function verifyCloudCode() {
-  const validationError = validateCloudSettings();
-  if (validationError) {
-    alert(validationError);
-    return;
-  }
-
-  await saveCloudSettings();
-
-  const email = els.cloudEmail.value.trim();
-  const token = (els.cloudOtp?.value || "").trim().replace(/\s+/g, "");
-  if (!email || !token) {
-    alert("Введи email и код из письма.");
-    return;
-  }
-
-  try {
-    setCloudBusy(true);
-    const client = cloudStorageAdapter.getClient();
-    let result = await client.auth.verifyOtp({ email, token, type: "email" });
-    if (result.error) {
-      result = await client.auth.verifyOtp({ email, token, type: "magiclink" });
-    }
-    if (result.error) throw result.error;
-
-    cloudConfig.enabled = true;
-    cloudConfig.email = email;
-    cloudConfig.userId = result.data?.user?.id || cloudConfig.userId;
-    cloudConfig.status = "synced";
-    if (els.cloudOtp) els.cloudOtp.value = "";
-    clearCloudLoginCooldown();
-    saveCloudConfig();
-    renderSyncStatus();
-    await syncFromCloudThenPushLocal();
-    alert("Облако подключено. Теперь слова будут синхронизироваться между компьютером и телефоном.");
-  } catch (error) {
-    cloudConfig.status = "offline";
-    cloudConfig.lastError = error?.message || "Code verification failed";
-    saveCloudConfig();
-    renderSyncStatus();
-    alert(`Код не подошел.\n\nОшибка: ${cloudConfig.lastError}`);
   } finally {
     setCloudBusy(false);
   }
@@ -694,7 +652,7 @@ async function manualCloudSync() {
       cloudConfig.status = "local";
       saveCloudConfig();
       renderSyncStatus();
-      alert("Сначала введи email, нажми «Отправить код», затем введи код из письма и нажми «Подтвердить».");
+      alert("Сначала введи email, нажми «Получить ссылку» и открой ссылку из письма на этом устройстве.");
       return;
     }
 
@@ -727,22 +685,22 @@ function renderSyncStatus() {
     synced: "Сохранено в облаке",
     offline: "Облако ждёт сеть",
     local: cloudIsConfigured() ? "Войди для синхронизации" : "Настрой облако",
-    "login-sent": "Проверь почту",
-    "rate-limited": "Подожди перед новым кодом"
+    "login-sent": "Открой ссылку в письме",
+    "rate-limited": "Подожди перед новой ссылкой"
   };
   const statusText = hasQueue && cloudConfig.enabled && cloudConfig.status !== "syncing" ? "Есть несохранённые изменения" : labels[cloudConfig.status] || labels.local;
   els.syncStatus.textContent = statusText;
   els.syncStatus.title = cloudConfig.lastError || (cloudConfig.lastSyncAt ? `Последняя синхронизация: ${cloudConfig.lastSyncAt}` : "Supabase синхронизация.");
 
   if (els.cloudUserLabel) {
-    els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : cloudConfig.status === "login-sent" ? "код отправлен" : cloudConfig.status === "rate-limited" ? "пауза" : "не подключено";
+    els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : cloudConfig.status === "login-sent" ? "ссылка отправлена" : cloudConfig.status === "rate-limited" ? "пауза" : "не подключено";
   }
 
   if (els.cloudStatusText) {
     els.cloudStatusText.textContent = cloudConfig.userId
       ? cloudConfig.email || "Слова доступны на всех устройствах"
       : cloudConfig.status === "login-sent"
-        ? "Введи код из письма"
+        ? "Открой ссылку из письма"
         : cloudConfig.status === "rate-limited"
           ? "Подожди несколько минут"
           : "Войди один раз на каждом устройстве";
@@ -751,7 +709,7 @@ function renderSyncStatus() {
   const waitSeconds = getCloudLoginWaitSeconds();
   if (els.loginCloudButton) {
     els.loginCloudButton.disabled = waitSeconds > 0 || cloudConfig.userId;
-    els.loginCloudButton.textContent = waitSeconds > 0 ? `Повтор через ${Math.ceil(waitSeconds / 60)} мин` : "Отправить код";
+    els.loginCloudButton.textContent = waitSeconds > 0 ? `Повтор через ${Math.ceil(waitSeconds / 60)} мин` : "Получить ссылку";
   }
 }
 
@@ -2187,7 +2145,6 @@ els.importButton.addEventListener("click", () => els.importFile.click());
 els.importFile.addEventListener("change", () => importBackup(els.importFile.files[0]));
 els.saveCloudButton?.addEventListener("click", saveCloudSettings);
 els.loginCloudButton?.addEventListener("click", loginCloud);
-els.verifyCloudButton?.addEventListener("click", verifyCloudCode);
 els.syncCloudButton?.addEventListener("click", manualCloudSync);
 els.logoutCloudButton?.addEventListener("click", logoutCloud);
 els.installButton?.addEventListener("click", async () => {
