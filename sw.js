@@ -1,4 +1,4 @@
-const CACHE_NAME = "bookwords-pwa-v19";
+const CACHE_NAME = "bookwords-pwa-v20";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -11,7 +11,9 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(APP_SHELL.map((url) => new Request(url, { cache: "reload" })))
+    )
   );
   self.skipWaiting();
 });
@@ -32,8 +34,22 @@ self.addEventListener("fetch", (event) => {
 
   if (!isSameOrigin) return;
 
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request, { cache: "reload" })
+        .then((response) => {
+          if (response.ok) {
+            caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", response.clone()));
+          }
+          return response;
+        })
+        .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "reload" })
       .then((response) => {
         const copy = response.clone();
         if (response.ok) {

@@ -15,6 +15,7 @@ const CLOUD_LOGIN_COOLDOWN_MS = 120000;
 const CLOUD_RATE_LIMIT_COOLDOWN_MS = 600000;
 const DAILY_GOAL = 10;
 const MAX_STARS = 7;
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || "dev";
 const AI_IMAGE_ENDPOINT = "https://image.pollinations.ai/prompt/";
 const QUIZ_MODES = ["en-ru", "ru-en", "spell", "listen"];
 
@@ -164,7 +165,8 @@ function registerPwa() {
       window.location.reload();
     });
 
-    navigator.serviceWorker.register("./sw.js").then((registration) => {
+    const serviceWorkerUrl = `./sw.js?v=${encodeURIComponent(APP_VERSION)}`;
+    navigator.serviceWorker.register(serviceWorkerUrl, { updateViaCache: "none" }).then((registration) => {
       registration.update();
     }).catch(() => {
       // PWA is an upgrade path; the app should still work if registration is blocked.

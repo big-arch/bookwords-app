@@ -1,8 +1,9 @@
 {
-  "version": "2026-07-09-v19",
+  "version": "2026-07-09-v20",
   "features": [
     "device-sync-key",
     "sidebar-sync-button",
-    "pastel-study-cards"
+    "pastel-study-cards",
+    "force-fresh-pwa-update"
   ]
 }
