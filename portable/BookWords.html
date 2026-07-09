@@ -2001,6 +2001,20 @@ function isSupabaseRateLimit(error) {
   return String(error?.message || "").toLowerCase().includes("rate limit");
 }
 
+function getReadableError(error) {
+  if (!error) return "Неизвестная ошибка";
+  if (error.message) return error.message;
+  if (error.error_description) return error.error_description;
+  if (error.error) return error.error;
+
+  try {
+    const text = JSON.stringify(error);
+    return text && text !== "{}" ? text : "Supabase не вернул текст ошибки";
+  } catch {
+    return String(error);
+  }
+}
+
 async function loginCloud() {
   const validationError = validateCloudSettings();
   if (validationError) {
@@ -2041,17 +2055,18 @@ async function loginCloud() {
     alert("Письмо отправлено. Введи код из письма в BookWords и нажми «Подключить».");
   } catch (error) {
     const rateLimited = isSupabaseRateLimit(error);
+    const readableError = getReadableError(error);
     cloudConfig.status = rateLimited ? "rate-limited" : "offline";
     cloudConfig.lastError = rateLimited
       ? "Слишком много запросов кода. Подожди несколько минут и не нажимай отправку повторно."
-      : error?.message || "Login failed";
+      : readableError;
     if (rateLimited) setCloudLoginCooldown(CLOUD_RATE_LIMIT_COOLDOWN_MS);
     saveCloudConfig();
     renderSyncStatus();
     if (rateLimited) {
       alert("Supabase временно ограничил отправку писем. Подожди несколько минут и проверь почту: возможно, предыдущий код уже пришёл.");
     } else {
-      alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase: Authentication -> URL Configuration -> Redirect URLs. Там должен быть адрес ${getAppBaseUrl()}`);
+      alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase:\n1. Authentication -> Emails -> SMTP: настройки должны быть сохранены без ошибки.\n2. Authentication -> URL Configuration -> Redirect URLs: должен быть адрес ${getAppBaseUrl()}`);
     }
   } finally {
     setCloudBusy(false);
