@@ -14,7 +14,7 @@
     <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
     <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=cloud-sync-5" />
+    <link rel="stylesheet" href="styles.css?v=cloud-sync-6" />
   </head>
   <body>
     <div class="app-shell">
@@ -59,8 +59,10 @@
             <span id="cloudUserLabel" class="cloud-state">не подключено</span>
           </summary>
           <input id="cloudEmail" type="email" placeholder="Email для входа" autocomplete="email" />
+          <input id="cloudOtp" type="text" placeholder="Код из письма" autocomplete="one-time-code" inputmode="numeric" />
           <div class="cloud-actions">
-            <button id="loginCloudButton" class="ghost-button" type="button">Получить ссылку</button>
+            <button id="loginCloudButton" class="ghost-button" type="button">Получить код</button>
+            <button id="verifyCloudButton" class="ghost-button" type="button">Подключить</button>
             <button id="syncCloudButton" class="ghost-button" type="button">Синхронизировать</button>
             <button id="logoutCloudButton" class="ghost-button" type="button">Выйти</button>
           </div>
@@ -218,6 +220,6 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="script.js?v=cloud-sync-10"></script>
+    <script src="script.js?v=cloud-sync-11"></script>
   </body>
 </html>

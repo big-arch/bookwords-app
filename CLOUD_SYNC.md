@@ -66,15 +66,19 @@ Set:
 
 Then click:
 
-1. `Получить ссылку`
-2. Open the email login link on the same device.
-3. BookWords completes login automatically and starts sync.
+1. `Получить код`
+2. Enter the one-time code from the email inside BookWords.
+3. Click `Подключить`.
 4. Use `Синхронизировать` only for a manual refresh.
 
 On iPhone, install BookWords from Safari with Share -> Add to Home Screen.
 Mail apps can open Supabase links in their own browser, which has a separate
-session from Safari/Home Screen apps. For a fully app-like login, configure the
-Supabase email template to send a one-time code and enter it inside BookWords.
+session from Safari/Home Screen apps. Use the one-time code flow inside the
+installed BookWords app to avoid browser switching.
+
+In Supabase, set the Auth email template to show the token, for example:
+
+`Your BookWords code: {{ .Token }}`
 
 Use the same Supabase settings and the same email on every computer and phone.
 
