@@ -71,9 +71,10 @@ Then click:
 3. BookWords completes login automatically and starts sync.
 4. Use `Синхронизировать` only for a manual refresh.
 
-On iPhone, some mail apps open the link in their own browser first. If that
-happens, BookWords shows `Продолжить в Safari`; open that link in Safari so the
-Safari/PWA session gets the same cloud login.
+On iPhone, install BookWords from Safari with Share -> Add to Home Screen.
+Mail apps can open Supabase links in their own browser, which has a separate
+session from Safari/Home Screen apps. For a fully app-like login, configure the
+Supabase email template to send a one-time code and enter it inside BookWords.
 
 Use the same Supabase settings and the same email on every computer and phone.
 

@@ -575,12 +575,30 @@ input:focus {
   justify-content: space-between;
   gap: 10px;
   color: var(--ink);
+  cursor: pointer;
   font-size: 13px;
+  list-style: none;
 }
 
-.cloud-heading div {
+.cloud-heading::-webkit-details-marker {
+  display: none;
+}
+
+.cloud-heading::before {
+  content: "▸";
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.cloud-panel[open] .cloud-heading::before {
+  content: "▾";
+}
+
+.cloud-title {
   display: grid;
   gap: 3px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -590,7 +608,7 @@ input:focus {
   line-height: 1.25;
 }
 
-.cloud-heading span {
+.cloud-state {
   flex: 0 0 auto;
   padding: 4px 8px;
   border-radius: 999px;
@@ -614,19 +632,6 @@ input:focus {
   min-height: 38px;
   padding: 0 8px;
   font-size: 12px;
-}
-
-.safari-bridge {
-  display: grid;
-  place-items: center;
-  min-height: 40px;
-  border: 1px solid rgba(47, 143, 131, 0.24);
-  border-radius: 8px;
-  background: rgba(47, 143, 131, 0.1);
-  color: var(--accent-strong);
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
 }
 
 .cloud-actions .ghost-button:disabled,

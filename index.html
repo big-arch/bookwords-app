@@ -13,7 +13,7 @@
     <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
     <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=cloud-sync-4" />
+    <link rel="stylesheet" href="styles.css?v=cloud-sync-5" />
   </head>
   <body>
     <div class="app-shell">
@@ -49,28 +49,27 @@
           <input id="importFile" class="file-input" type="file" accept="application/json,.json" />
         </div>
 
-        <section class="cloud-panel" aria-label="Облачная синхронизация">
-          <div class="cloud-heading">
-            <div>
+        <details class="cloud-panel" aria-label="Облачная синхронизация">
+          <summary class="cloud-heading">
+            <span class="cloud-title">
               <strong>Облако</strong>
               <small id="cloudStatusText">Слова будут доступны на телефоне</small>
-            </div>
-            <span id="cloudUserLabel">не подключено</span>
-          </div>
+            </span>
+            <span id="cloudUserLabel" class="cloud-state">не подключено</span>
+          </summary>
           <input id="cloudEmail" type="email" placeholder="Email для входа" autocomplete="email" />
           <div class="cloud-actions">
             <button id="loginCloudButton" class="ghost-button" type="button">Получить ссылку</button>
             <button id="syncCloudButton" class="ghost-button" type="button">Синхронизировать</button>
             <button id="logoutCloudButton" class="ghost-button" type="button">Выйти</button>
           </div>
-          <a id="openSafariButton" class="safari-bridge hidden" href="#">Продолжить в Safari</a>
           <details class="cloud-advanced">
             <summary>Настройки Supabase</summary>
             <input id="cloudUrl" type="url" placeholder="Supabase URL" autocomplete="off" />
             <input id="cloudAnonKey" type="password" placeholder="Supabase public key" autocomplete="off" />
             <button id="saveCloudButton" class="ghost-button" type="button">Сохранить настройки</button>
           </details>
-        </section>
+        </details>
 
         <nav id="collectionList" class="collection-list" aria-label="Список книг"></nav>
 
@@ -218,6 +217,6 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="script.js?v=cloud-sync-9"></script>
+    <script src="script.js?v=cloud-sync-10"></script>
   </body>
 </html>

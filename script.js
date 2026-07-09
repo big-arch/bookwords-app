@@ -8,7 +8,6 @@ const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
 const CLOUD_LOGIN_NEXT_AT_KEY = "bookwords.cloudLoginNextAt.v1";
 const DEFAULT_SUPABASE_URL = "https://renbakjudvdnkjvjujti.supabase.co";
 const DEFAULT_SUPABASE_PUBLIC_KEY = "sb_publishable_tJ2cQXwiFEv-1r6wHRwndg_5hEN-h4C";
-const CLOUD_SESSION_HASH_KEY = "bw_session";
 const TRANSLATION_DEBOUNCE_MS = 450;
 const CLOUD_LOGIN_COOLDOWN_MS = 120000;
 const CLOUD_RATE_LIMIT_COOLDOWN_MS = 600000;
@@ -128,7 +127,6 @@ const els = {
   loginCloudButton: document.querySelector("#loginCloudButton"),
   syncCloudButton: document.querySelector("#syncCloudButton"),
   logoutCloudButton: document.querySelector("#logoutCloudButton"),
-  openSafariButton: document.querySelector("#openSafariButton"),
   installButton: document.querySelector("#installButton"),
   exportButton: document.querySelector("#exportButton"),
   importButton: document.querySelector("#importButton"),
@@ -398,66 +396,6 @@ function createCloudClient() {
   });
 }
 
-function encodeSessionBridge(session) {
-  if (!session?.access_token || !session?.refresh_token) return "";
-  const payload = JSON.stringify({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-    expires_at: session.expires_at || 0
-  });
-  const bytes = new TextEncoder().encode(payload);
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-}
-
-function decodeSessionBridge(value) {
-  const binary = atob(value);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return JSON.parse(new TextDecoder().decode(bytes));
-}
-
-function cleanSessionHash() {
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  hash.delete(CLOUD_SESSION_HASH_KEY);
-  const nextHash = hash.toString();
-  window.history.replaceState({}, document.title, window.location.pathname + window.location.search + (nextHash ? `#${nextHash}` : ""));
-}
-
-async function importCloudSessionFromUrl(client) {
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const bridge = hash.get(CLOUD_SESSION_HASH_KEY);
-  if (!bridge) return false;
-
-  const session = decodeSessionBridge(bridge);
-  if (!session?.access_token || !session?.refresh_token) return false;
-
-  const { error } = await client.auth.setSession({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token
-  });
-  if (error) throw error;
-
-  cleanSessionHash();
-  clearCloudLoginCooldown();
-  return true;
-}
-
-function showSafariBridge(session) {
-  if (!els.openSafariButton) return;
-  const bridge = encodeSessionBridge(session);
-  if (!bridge) return;
-
-  const url = new URL(window.location.href);
-  url.searchParams.delete("code");
-  url.hash = `${CLOUD_SESSION_HASH_KEY}=${encodeURIComponent(bridge)}`;
-  els.openSafariButton.href = url.href;
-  els.openSafariButton.classList.remove("hidden");
-  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-}
-
 async function completeCloudLoginFromUrl(client) {
   const url = new URL(window.location.href);
   const code = url.searchParams.get("code");
@@ -512,8 +450,7 @@ async function initCloud() {
 
   try {
     supabaseClient = createCloudClient();
-    const importedLogin = await importCloudSessionFromUrl(supabaseClient);
-    const completedLogin = importedLogin || await completeCloudLoginFromUrl(supabaseClient);
+    const completedLogin = await completeCloudLoginFromUrl(supabaseClient);
     const { data } = await supabaseClient.auth.getSession();
     const user = data.session?.user || null;
     cloudConfig.enabled = Boolean(user);
@@ -533,9 +470,8 @@ async function initCloud() {
     if (user) {
       await syncFromCloudThenPushLocal();
       if (completedLogin) {
-        if (!importedLogin) showSafariBridge(data.session);
         window.setTimeout(() => {
-          alert(importedLogin ? "Облако подключено в Safari. Слова синхронизируются автоматически." : "Облако подключено. Если ты внутри почты, нажми «Продолжить в Safari» или значок Safari.");
+          alert("Облако подключено. Слова синхронизируются автоматически.");
         }, 250);
       }
     }
