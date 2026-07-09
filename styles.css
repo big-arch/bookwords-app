@@ -562,7 +562,7 @@ input:focus {
 
 .cloud-panel {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   padding: 12px;
   border: 1px solid rgba(31, 41, 51, 0.08);
   border-radius: 8px;
@@ -571,13 +571,30 @@ input:focus {
 
 .cloud-heading {
   display: flex;
+  align-items: start;
   justify-content: space-between;
   gap: 10px;
   color: var(--ink);
   font-size: 13px;
 }
 
+.cloud-heading div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cloud-heading small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
 .cloud-heading span {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(47, 143, 131, 0.1);
   color: var(--muted);
   font-size: 12px;
 }
@@ -596,6 +613,35 @@ input:focus {
 .cloud-actions .ghost-button {
   min-height: 38px;
   padding: 0 8px;
+  font-size: 12px;
+}
+
+.cloud-actions .ghost-button:disabled,
+.cloud-advanced .ghost-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.cloud-advanced {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.cloud-advanced summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  list-style-position: inside;
+}
+
+.cloud-advanced[open] {
+  padding-top: 8px;
+  border-top: 1px solid rgba(31, 41, 51, 0.08);
+}
+
+.cloud-advanced .ghost-button {
+  min-height: 38px;
   font-size: 12px;
 }
 
