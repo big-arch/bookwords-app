@@ -5,6 +5,8 @@ const IMAGE_CACHE_KEY = "bookwords.imageCache.v1";
 const CLOUD_CONFIG_KEY = "bookwords.cloudConfig.v1";
 const SYNC_QUEUE_KEY = "bookwords.syncQueue.v1";
 const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
+const DEFAULT_SUPABASE_URL = "https://renbakjudvdnkjvjujti.supabase.co";
+const DEFAULT_SUPABASE_PUBLIC_KEY = "sb_publishable_tJ2cQXwiFEv-1r6wHRwndg_5hEN-h4C";
 const TRANSLATION_DEBOUNCE_MS = 450;
 const DAILY_GOAL = 10;
 const MAX_STARS = 7;
@@ -117,8 +119,10 @@ const els = {
   cloudUrl: document.querySelector("#cloudUrl"),
   cloudAnonKey: document.querySelector("#cloudAnonKey"),
   cloudEmail: document.querySelector("#cloudEmail"),
+  cloudOtp: document.querySelector("#cloudOtp"),
   saveCloudButton: document.querySelector("#saveCloudButton"),
   loginCloudButton: document.querySelector("#loginCloudButton"),
+  verifyCloudButton: document.querySelector("#verifyCloudButton"),
   syncCloudButton: document.querySelector("#syncCloudButton"),
   logoutCloudButton: document.querySelector("#logoutCloudButton"),
   installButton: document.querySelector("#installButton"),
@@ -170,8 +174,8 @@ function loadCloudConfig() {
     return {
       enabled: Boolean(parsed?.enabled),
       provider: parsed?.provider || "supabase",
-      supabaseUrl: normalizeSupabaseUrl(parsed?.supabaseUrl || ""),
-      supabaseAnonKey: parsed?.supabaseAnonKey || "",
+      supabaseUrl: normalizeSupabaseUrl(parsed?.supabaseUrl || DEFAULT_SUPABASE_URL),
+      supabaseAnonKey: parsed?.supabaseAnonKey || DEFAULT_SUPABASE_PUBLIC_KEY,
       email: parsed?.email || "",
       userId: parsed?.userId || "",
       lastSyncAt: parsed?.lastSyncAt || "",
@@ -181,8 +185,8 @@ function loadCloudConfig() {
     return {
       enabled: false,
       provider: "supabase",
-      supabaseUrl: "",
-      supabaseAnonKey: "",
+      supabaseUrl: DEFAULT_SUPABASE_URL,
+      supabaseAnonKey: DEFAULT_SUPABASE_PUBLIC_KEY,
       email: "",
       userId: "",
       lastSyncAt: "",
@@ -285,7 +289,7 @@ const cloudStorageAdapter = {
       throw new Error("Supabase settings are empty.");
     }
 
-    supabaseClient = window.supabase.createClient(cloudConfig.supabaseUrl, cloudConfig.supabaseAnonKey);
+    supabaseClient = createCloudClient();
     return supabaseClient;
   },
 
@@ -380,6 +384,28 @@ function normalizeSupabaseUrl(value) {
   }
 }
 
+function createCloudClient() {
+  return window.supabase.createClient(cloudConfig.supabaseUrl, cloudConfig.supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      persistSession: true
+    }
+  });
+}
+
+async function completeCloudLoginFromUrl(client) {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("code");
+  if (!code) return;
+
+  const { error } = await client.auth.exchangeCodeForSession(code);
+  if (error) throw error;
+
+  url.searchParams.delete("code");
+  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+}
+
 function validateCloudSettings() {
   const url = normalizeSupabaseUrl(els.cloudUrl.value);
   const key = els.cloudAnonKey.value.trim();
@@ -419,7 +445,8 @@ async function initCloud() {
   }
 
   try {
-    supabaseClient = window.supabase.createClient(cloudConfig.supabaseUrl, cloudConfig.supabaseAnonKey);
+    supabaseClient = createCloudClient();
+    await completeCloudLoginFromUrl(supabaseClient);
     const { data } = await supabaseClient.auth.getSession();
     const user = data.session?.user || null;
     cloudConfig.enabled = Boolean(user);
@@ -487,13 +514,55 @@ async function loginCloud() {
     cloudConfig.status = "login-sent";
     saveCloudConfig();
     renderSyncStatus();
-    alert("Письмо для входа отправлено. Открой ссылку из письма на этом устройстве.");
+    alert("Письмо для входа отправлено. Если в письме есть код, введи его в приложении и нажми 'Подтвердить'. Если есть только ссылка, открой ее на этом устройстве.");
   } catch (error) {
     cloudConfig.status = "offline";
     cloudConfig.lastError = error?.message || "Login failed";
     saveCloudConfig();
     renderSyncStatus();
     alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase: Authentication -> URL Configuration -> Redirect URLs. Там должен быть адрес ${getAppBaseUrl()}`);
+  }
+}
+
+async function verifyCloudCode() {
+  const validationError = validateCloudSettings();
+  if (validationError) {
+    alert(validationError);
+    return;
+  }
+
+  await saveCloudSettings();
+
+  const email = els.cloudEmail.value.trim();
+  const token = (els.cloudOtp?.value || "").trim().replace(/\s+/g, "");
+  if (!email || !token) {
+    alert("Введи email и код из письма.");
+    return;
+  }
+
+  try {
+    const client = cloudStorageAdapter.getClient();
+    let result = await client.auth.verifyOtp({ email, token, type: "email" });
+    if (result.error) {
+      result = await client.auth.verifyOtp({ email, token, type: "magiclink" });
+    }
+    if (result.error) throw result.error;
+
+    cloudConfig.enabled = true;
+    cloudConfig.email = email;
+    cloudConfig.userId = result.data?.user?.id || cloudConfig.userId;
+    cloudConfig.status = "synced";
+    if (els.cloudOtp) els.cloudOtp.value = "";
+    saveCloudConfig();
+    renderSyncStatus();
+    await syncFromCloudThenPushLocal();
+    alert("Вход подтвержден. Облако подключено.");
+  } catch (error) {
+    cloudConfig.status = "offline";
+    cloudConfig.lastError = error?.message || "Code verification failed";
+    saveCloudConfig();
+    renderSyncStatus();
+    alert(`Код не подошел.\n\nОшибка: ${cloudConfig.lastError}`);
   }
 }
 
@@ -2038,6 +2107,7 @@ els.importButton.addEventListener("click", () => els.importFile.click());
 els.importFile.addEventListener("change", () => importBackup(els.importFile.files[0]));
 els.saveCloudButton?.addEventListener("click", saveCloudSettings);
 els.loginCloudButton?.addEventListener("click", loginCloud);
+els.verifyCloudButton?.addEventListener("click", verifyCloudCode);
 els.syncCloudButton?.addEventListener("click", manualCloudSync);
 els.logoutCloudButton?.addEventListener("click", logoutCloud);
 els.installButton?.addEventListener("click", async () => {
