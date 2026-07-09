@@ -22,38 +22,42 @@ Supabase is the simplest next step because it gives:
 
 ## Supabase Setup
 
+BookWords now uses a personal sync code instead of email login. The same code
+on every device points to the same cloud snapshot.
+
 ```sql
-create table profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+create table if not exists bookwords_sync (
+  sync_key text primary key,
   updated_at timestamptz not null default now(),
   data jsonb not null default '{}'
 );
 
-alter table profiles enable row level security;
+alter table bookwords_sync enable row level security;
 
-create policy "Users can read own profile"
-on profiles for select
-using (auth.uid() = id);
+create policy "BookWords can read by sync key"
+on bookwords_sync for select
+using (true);
 
-create policy "Users can insert own profile"
-on profiles for insert
-with check (auth.uid() = id);
+create policy "BookWords can insert by sync key"
+on bookwords_sync for insert
+with check (true);
 
-create policy "Users can update own profile"
-on profiles for update
-using (auth.uid() = id)
-with check (auth.uid() = id);
+create policy "BookWords can update by sync key"
+on bookwords_sync for update
+using (true)
+with check (true);
 ```
 
-Each user stores one `data` JSON snapshot. Later this can be split into `books`, `words`, and `progress` tables.
+Each sync code stores one `data` JSON snapshot. Use a long random code generated
+inside BookWords and keep it private.
 
 ## App Settings
 
-In the BookWords sidebar, paste:
+In the BookWords sidebar:
 
-- Supabase project URL;
-- Supabase public key: either the old `anon public key` or the new `Publishable key`;
-- email for login.
+- click `Создать код` on the first device;
+- use the same generated code on every other device;
+- click `Подключить`.
 
 In Supabase, also open:
 
@@ -64,21 +68,7 @@ Set:
 - Site URL: `https://big-arch.github.io/bookwords-app/`
 - Redirect URLs: `https://big-arch.github.io/bookwords-app/`
 
-Then click:
-
-1. `Получить код`
-2. Enter the one-time code from the email inside BookWords.
-3. Click `Подключить`.
-4. Use `Синхронизировать` only for a manual refresh.
-
 On iPhone, install BookWords from Safari with Share -> Add to Home Screen.
-Mail apps can open Supabase links in their own browser, which has a separate
-session from Safari/Home Screen apps. Use the one-time code flow inside the
-installed BookWords app to avoid browser switching.
-
-In Supabase, set the Auth email template to show the token, for example:
-
-`Your BookWords code: {{ .Token }}`
 
 Use the same Supabase settings and the same email on every computer and phone.
 

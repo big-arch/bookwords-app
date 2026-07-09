@@ -8,6 +8,7 @@ const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
 const CLOUD_LOGIN_NEXT_AT_KEY = "bookwords.cloudLoginNextAt.v1";
 const DEFAULT_SUPABASE_URL = "https://renbakjudvdnkjvjujti.supabase.co";
 const DEFAULT_SUPABASE_PUBLIC_KEY = "sb_publishable_tJ2cQXwiFEv-1r6wHRwndg_5hEN-h4C";
+const CLOUD_SYNC_TABLE = "bookwords_sync";
 const TRANSLATION_DEBOUNCE_MS = 450;
 const CLOUD_LOGIN_COOLDOWN_MS = 120000;
 const CLOUD_RATE_LIMIT_COOLDOWN_MS = 600000;
@@ -181,6 +182,7 @@ function loadCloudConfig() {
       supabaseUrl: normalizeSupabaseUrl(parsed?.supabaseUrl || DEFAULT_SUPABASE_URL),
       supabaseAnonKey: parsed?.supabaseAnonKey || DEFAULT_SUPABASE_PUBLIC_KEY,
       email: parsed?.email || "",
+      syncKey: parsed?.syncKey || parsed?.email || "",
       userId: parsed?.userId || "",
       lastSyncAt: parsed?.lastSyncAt || "",
       status: parsed?.status || "local"
@@ -192,6 +194,7 @@ function loadCloudConfig() {
       supabaseUrl: DEFAULT_SUPABASE_URL,
       supabaseAnonKey: DEFAULT_SUPABASE_PUBLIC_KEY,
       email: "",
+      syncKey: "",
       userId: "",
       lastSyncAt: "",
       status: "local"
@@ -298,21 +301,19 @@ const cloudStorageAdapter = {
   },
 
   async getUser() {
-    const client = this.getClient();
-    const { data, error } = await client.auth.getUser();
-    if (error) throw error;
-    return data.user;
+    const key = normalizeSyncKey(cloudConfig.syncKey || cloudConfig.email);
+    return key ? { id: key } : null;
   },
 
   async push(snapshot) {
     const client = this.getClient();
     const user = await this.getUser();
-    if (!user) throw new Error("Sign in before syncing.");
+    if (!user) throw new Error("Введите личный код синхронизации.");
 
     const { error } = await client
-      .from("profiles")
+      .from(CLOUD_SYNC_TABLE)
       .upsert({
-        id: user.id,
+        sync_key: user.id,
         updated_at: snapshot.updatedAt || new Date().toISOString(),
         data: snapshot
       });
@@ -323,12 +324,12 @@ const cloudStorageAdapter = {
   async pull() {
     const client = this.getClient();
     const user = await this.getUser();
-    if (!user) throw new Error("Sign in before loading cloud data.");
+    if (!user) throw new Error("Введите личный код синхронизации.");
 
     const { data, error } = await client
-      .from("profiles")
+      .from(CLOUD_SYNC_TABLE)
       .select("data, updated_at")
-      .eq("id", user.id)
+      .eq("sync_key", user.id)
       .maybeSingle();
 
     if (error) throw error;
@@ -364,6 +365,15 @@ function applyCloudSnapshot(snapshot) {
 
 function cloudIsConfigured() {
   return Boolean(cloudConfig.supabaseUrl && cloudConfig.supabaseAnonKey);
+}
+
+function normalizeSyncKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
+
+function createSyncKey() {
+  const random = crypto.getRandomValues(new Uint32Array(2));
+  return `bookwords-${random[0].toString(36)}-${random[1].toString(36)}`;
 }
 
 function getAppBaseUrl() {
@@ -440,7 +450,7 @@ function validateCloudSettings() {
 function hydrateCloudForm() {
   if (els.cloudUrl) els.cloudUrl.value = cloudConfig.supabaseUrl || "";
   if (els.cloudAnonKey) els.cloudAnonKey.value = cloudConfig.supabaseAnonKey || "";
-  if (els.cloudEmail) els.cloudEmail.value = cloudConfig.email || "";
+  if (els.cloudEmail) els.cloudEmail.value = cloudConfig.syncKey || cloudConfig.email || "";
 }
 
 async function initCloud() {
@@ -452,30 +462,14 @@ async function initCloud() {
 
   try {
     supabaseClient = createCloudClient();
-    const completedLogin = await completeCloudLoginFromUrl(supabaseClient);
-    const { data } = await supabaseClient.auth.getSession();
-    const user = data.session?.user || null;
+    const user = normalizeSyncKey(cloudConfig.syncKey || cloudConfig.email) ? { id: normalizeSyncKey(cloudConfig.syncKey || cloudConfig.email) } : null;
     cloudConfig.enabled = Boolean(user);
     cloudConfig.userId = user?.id || "";
     cloudConfig.status = user ? "synced" : "local";
     saveCloudConfig();
 
-    supabaseClient.auth.onAuthStateChange((_event, session) => {
-      cloudConfig.enabled = Boolean(session?.user);
-      cloudConfig.userId = session?.user?.id || "";
-      cloudConfig.status = session?.user ? "synced" : "local";
-      saveCloudConfig();
-      renderSyncStatus();
-      if (session?.user) syncFromCloudThenPushLocal();
-    });
-
     if (user) {
       await syncFromCloudThenPushLocal();
-      if (completedLogin) {
-        window.setTimeout(() => {
-          alert("Облако подключено. Слова синхронизируются автоматически.");
-        }, 250);
-      }
     }
   } catch (error) {
     cloudConfig.status = "offline";
@@ -490,7 +484,8 @@ async function saveCloudSettings() {
   cloudConfig.supabaseUrl = normalizeSupabaseUrl(els.cloudUrl.value);
   els.cloudUrl.value = cloudConfig.supabaseUrl;
   cloudConfig.supabaseAnonKey = els.cloudAnonKey.value.trim();
-  cloudConfig.email = els.cloudEmail.value.trim();
+  cloudConfig.syncKey = normalizeSyncKey(els.cloudEmail.value);
+  cloudConfig.email = cloudConfig.syncKey;
   cloudConfig.provider = "supabase";
   cloudConfig.status = cloudIsConfigured() ? "local" : "local";
   supabaseClient = null;
@@ -546,61 +541,9 @@ function getReadableError(error) {
 }
 
 async function loginCloud() {
-  const validationError = validateCloudSettings();
-  if (validationError) {
-    alert(validationError);
-    return;
-  }
-
-  await saveCloudSettings();
-
-  const email = els.cloudEmail.value.trim();
-  if (!email) {
-    alert("Введи email для входа.");
-    return;
-  }
-
-  const waitSeconds = getCloudLoginWaitSeconds();
-  if (waitSeconds > 0) {
-    alert(`Код уже запрошен. Подожди примерно ${Math.ceil(waitSeconds / 60)} мин. или проверь письмо, которое уже пришло.`);
-    renderSyncStatus();
-    return;
-  }
-
-  try {
-    setCloudBusy(true);
-    const client = cloudStorageAdapter.getClient();
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: getAppBaseUrl()
-      }
-    });
-    if (error) throw error;
-    cloudConfig.email = email;
-    cloudConfig.status = "login-sent";
-    setCloudLoginCooldown();
-    saveCloudConfig();
-    renderSyncStatus();
-    alert("Письмо отправлено. Введи код из письма в BookWords и нажми «Подключить».");
-  } catch (error) {
-    const rateLimited = isSupabaseRateLimit(error);
-    const readableError = getReadableError(error);
-    cloudConfig.status = rateLimited ? "rate-limited" : "offline";
-    cloudConfig.lastError = rateLimited
-      ? "Слишком много запросов кода. Подожди несколько минут и не нажимай отправку повторно."
-      : readableError;
-    if (rateLimited) setCloudLoginCooldown(CLOUD_RATE_LIMIT_COOLDOWN_MS);
-    saveCloudConfig();
-    renderSyncStatus();
-    if (rateLimited) {
-      alert("Supabase временно ограничил отправку писем. Подожди несколько минут и проверь почту: возможно, предыдущий код уже пришёл.");
-    } else {
-      alert(`Не удалось отправить письмо.\n\nОшибка Supabase: ${cloudConfig.lastError}\n\nПроверь в Supabase:\n1. Authentication -> Emails -> SMTP: настройки должны быть сохранены без ошибки.\n2. Authentication -> URL Configuration -> Redirect URLs: должен быть адрес ${getAppBaseUrl()}`);
-    }
-  } finally {
-    setCloudBusy(false);
-  }
+  const nextKey = createSyncKey();
+  els.cloudEmail.value = nextKey;
+  await verifyCloudCode();
 }
 
 async function verifyCloudCode() {
@@ -612,51 +555,39 @@ async function verifyCloudCode() {
 
   await saveCloudSettings();
 
-  const email = els.cloudEmail.value.trim();
-  const token = (els.cloudOtp?.value || "").trim().replace(/\s+/g, "");
-  if (!email || !token) {
-    alert("Введи email и код из письма.");
+  const syncKey = normalizeSyncKey(els.cloudEmail.value);
+  if (!syncKey) {
+    alert("Введи или создай личный код синхронизации.");
     return;
   }
 
   try {
     setCloudBusy(true);
-    const client = cloudStorageAdapter.getClient();
-    let result = await client.auth.verifyOtp({ email, token, type: "email" });
-    if (result.error) {
-      result = await client.auth.verifyOtp({ email, token, type: "magiclink" });
-    }
-    if (result.error) throw result.error;
-
+    cloudConfig.syncKey = syncKey;
+    cloudConfig.email = syncKey;
     cloudConfig.enabled = true;
-    cloudConfig.email = email;
-    cloudConfig.userId = result.data?.user?.id || cloudConfig.userId;
+    cloudConfig.userId = syncKey;
     cloudConfig.status = "synced";
-    if (els.cloudOtp) els.cloudOtp.value = "";
     clearCloudLoginCooldown();
     saveCloudConfig();
     renderSyncStatus();
     await syncFromCloudThenPushLocal();
-    alert("Облако подключено. Теперь слова будут синхронизироваться между компьютером и телефоном.");
+    alert("Облако подключено. Введи этот же код на телефоне, чтобы получить те же слова.");
   } catch (error) {
     cloudConfig.status = "offline";
-    cloudConfig.lastError = error?.message || "Code verification failed";
+    cloudConfig.lastError = getReadableError(error);
     saveCloudConfig();
     renderSyncStatus();
-    alert(`Код не подошёл.\n\nОшибка: ${cloudConfig.lastError}`);
+    alert(`Синхронизация не подключилась.\n\nОшибка: ${cloudConfig.lastError}\n\nЕсли таблица ещё не создана, открой SQL Editor в Supabase и выполни SQL, который я дам в чате.`);
   } finally {
     setCloudBusy(false);
   }
 }
 
 async function logoutCloud() {
-  try {
-    if (supabaseClient) await supabaseClient.auth.signOut();
-  } catch {
-    // Keep local data even if sign out fails.
-  }
   cloudConfig.enabled = false;
   cloudConfig.userId = "";
+  cloudConfig.syncKey = "";
   cloudConfig.status = "local";
   saveCloudConfig();
   renderSyncStatus();
@@ -707,18 +638,15 @@ async function manualCloudSync() {
 
   try {
     setCloudBusy(true);
-    const client = cloudStorageAdapter.getClient();
-    const { data, error } = await client.auth.getSession();
-    if (error) throw error;
-
-    const user = data.session?.user || null;
+    cloudStorageAdapter.getClient();
+    const user = await cloudStorageAdapter.getUser();
     if (!user) {
       cloudConfig.enabled = false;
       cloudConfig.userId = "";
       cloudConfig.status = "local";
       saveCloudConfig();
       renderSyncStatus();
-      alert("Сначала введи email, нажми «Получить код», затем введи код из письма и нажми «Подключить».");
+      alert("Сначала создай или введи личный код синхронизации и нажми «Подключить».");
       return;
     }
 
@@ -750,8 +678,8 @@ function renderSyncStatus() {
     syncing: "Синхронизация...",
     synced: "Сохранено в облаке",
     offline: "Облако ждёт сеть",
-    local: cloudIsConfigured() ? "Войди для синхронизации" : "Настрой облако",
-    "login-sent": "Введи код из письма",
+    local: cloudIsConfigured() ? "Введи код синхронизации" : "Настрой облако",
+    "login-sent": "Введи код синхронизации",
     "rate-limited": "Подожди перед новым кодом"
   };
   const statusText = hasQueue && cloudConfig.enabled && cloudConfig.status !== "syncing" ? "Есть несохранённые изменения" : labels[cloudConfig.status] || labels.local;
@@ -759,23 +687,18 @@ function renderSyncStatus() {
   els.syncStatus.title = cloudConfig.lastError || (cloudConfig.lastSyncAt ? `Последняя синхронизация: ${cloudConfig.lastSyncAt}` : "Supabase синхронизация.");
 
   if (els.cloudUserLabel) {
-    els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : cloudConfig.status === "login-sent" ? "код отправлен" : cloudConfig.status === "rate-limited" ? "пауза" : "не подключено";
+    els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : "не подключено";
   }
 
   if (els.cloudStatusText) {
     els.cloudStatusText.textContent = cloudConfig.userId
-      ? cloudConfig.email || "Слова доступны на всех устройствах"
-      : cloudConfig.status === "login-sent"
-        ? "Введи код из письма"
-        : cloudConfig.status === "rate-limited"
-          ? "Подожди несколько минут"
-          : "Войди один раз на каждом устройстве";
+      ? "Введи этот же код на телефоне"
+      : "Один код на всех устройствах";
   }
 
-  const waitSeconds = getCloudLoginWaitSeconds();
   if (els.loginCloudButton) {
-    els.loginCloudButton.disabled = waitSeconds > 0 || cloudConfig.userId;
-    els.loginCloudButton.textContent = waitSeconds > 0 ? `Повтор через ${Math.ceil(waitSeconds / 60)} мин` : "Получить код";
+    els.loginCloudButton.disabled = Boolean(cloudConfig.userId);
+    els.loginCloudButton.textContent = "Создать код";
   }
 }
 
