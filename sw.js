@@ -1,4 +1,4 @@
-const CACHE_NAME = "bookwords-pwa-v14";
+const CACHE_NAME = "bookwords-pwa-v15";
 const APP_SHELL = [
   "./",
   "./index.html",
