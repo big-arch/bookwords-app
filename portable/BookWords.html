@@ -335,6 +335,21 @@ input:focus {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.stats .stat-total {
+  background: #f3f5f8;
+  border-color: rgba(104, 115, 130, 0.16);
+}
+
+.stats .stat-known {
+  background: #eaf5ee;
+  border-color: rgba(47, 143, 96, 0.18);
+}
+
+.stats .stat-due {
+  background: #f8e8e8;
+  border-color: rgba(201, 79, 100, 0.18);
+}
+
 .stats strong {
   display: block;
   font-size: 24px;
@@ -577,6 +592,14 @@ input:focus {
   grid-column: 1 / -1;
 }
 
+.sidebar-actions .sync-button {
+  grid-column: 1 / -1;
+  border-color: rgba(47, 143, 131, 0.24);
+  background: rgba(47, 143, 131, 0.1);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
 .cloud-panel {
   display: grid;
   gap: 10px;
@@ -754,6 +777,26 @@ input:focus {
   border: 1px solid rgba(31, 41, 51, 0.08);
   border-radius: 8px;
   background: #ffffff;
+}
+
+.today-card.metric-due {
+  background: #f8e8e8;
+  border-color: rgba(201, 79, 100, 0.18);
+}
+
+.today-card.metric-new {
+  background: #f8efe2;
+  border-color: rgba(217, 154, 43, 0.2);
+}
+
+.today-card.metric-known {
+  background: #eaf5ee;
+  border-color: rgba(47, 143, 96, 0.18);
+}
+
+.today-card.metric-total {
+  background: #f3f5f8;
+  border-color: rgba(104, 115, 130, 0.16);
 }
 
 .today-card span,
@@ -1294,6 +1337,7 @@ input:focus {
           <button id="installButton" class="ghost-button install-button hidden" type="button">Установить</button>
           <button id="exportButton" class="ghost-button" type="button">Экспорт</button>
           <button id="importButton" class="ghost-button" type="button">Импорт</button>
+          <button id="syncCloudButton" class="ghost-button sync-button" type="button">Синхронизировать</button>
           <input id="importFile" class="file-input" type="file" accept="application/json,.json" />
         </div>
 
@@ -1309,7 +1353,6 @@ input:focus {
           <div class="cloud-actions">
             <button id="loginCloudButton" class="ghost-button" type="button">Создать код</button>
             <button id="verifyCloudButton" class="ghost-button" type="button">Подключить</button>
-            <button id="syncCloudButton" class="ghost-button" type="button">Синхронизировать</button>
             <button id="logoutCloudButton" class="ghost-button" type="button">Выйти</button>
           </div>
           <details class="cloud-advanced">
@@ -1335,15 +1378,15 @@ input:focus {
             </div>
           </div>
           <div class="stats">
-            <div>
+            <div class="stat-card stat-total">
               <strong id="totalWords">0</strong>
               <span>слов</span>
             </div>
-            <div>
+            <div class="stat-card stat-known">
               <strong id="knownWords">0</strong>
               <span>знаю</span>
             </div>
-            <div>
+            <div class="stat-card stat-due">
               <strong id="dueWords">0</strong>
               <span>к повтору</span>
             </div>
@@ -1475,6 +1518,7 @@ const CLOUD_CONFIG_KEY = "bookwords.cloudConfig.v1";
 const SYNC_QUEUE_KEY = "bookwords.syncQueue.v1";
 const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
 const CLOUD_LOGIN_NEXT_AT_KEY = "bookwords.cloudLoginNextAt.v1";
+const DEVICE_SYNC_KEY = "bookwords.deviceSyncKey.v1";
 const DEFAULT_SUPABASE_URL = "https://renbakjudvdnkjvjujti.supabase.co";
 const DEFAULT_SUPABASE_PUBLIC_KEY = "sb_publishable_tJ2cQXwiFEv-1r6wHRwndg_5hEN-h4C";
 const CLOUD_SYNC_TABLE = "bookwords_sync";
@@ -1642,17 +1686,19 @@ function registerPwa() {
 
 function loadCloudConfig() {
   const saved = localStorage.getItem(CLOUD_CONFIG_KEY);
+  const deviceSyncKey = localStorage.getItem(DEVICE_SYNC_KEY) || "";
 
   try {
     const parsed = saved ? JSON.parse(saved) : null;
+    const syncKey = parsed?.syncKey || parsed?.email || deviceSyncKey;
     return {
-      enabled: Boolean(parsed?.enabled),
+      enabled: Boolean(parsed?.enabled || syncKey),
       provider: parsed?.provider || "supabase",
       supabaseUrl: normalizeSupabaseUrl(parsed?.supabaseUrl || DEFAULT_SUPABASE_URL),
       supabaseAnonKey: parsed?.supabaseAnonKey || DEFAULT_SUPABASE_PUBLIC_KEY,
-      email: parsed?.email || "",
-      syncKey: parsed?.syncKey || parsed?.email || "",
-      userId: parsed?.userId || "",
+      email: syncKey,
+      syncKey,
+      userId: parsed?.userId || syncKey,
       lastSyncAt: parsed?.lastSyncAt || "",
       status: parsed?.status || "local"
     };
@@ -1677,6 +1723,9 @@ var supabaseClient = null;
 
 function saveCloudConfig() {
   localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+  if (cloudConfig.syncKey) {
+    localStorage.setItem(DEVICE_SYNC_KEY, cloudConfig.syncKey);
+  }
 }
 
 function getLocalUpdatedAt() {
@@ -1919,7 +1968,7 @@ function validateCloudSettings() {
 function hydrateCloudForm() {
   if (els.cloudUrl) els.cloudUrl.value = cloudConfig.supabaseUrl || "";
   if (els.cloudAnonKey) els.cloudAnonKey.value = cloudConfig.supabaseAnonKey || "";
-  if (els.cloudEmail) els.cloudEmail.value = cloudConfig.syncKey || cloudConfig.email || "";
+  if (els.cloudEmail) els.cloudEmail.value = cloudConfig.syncKey || cloudConfig.email || localStorage.getItem(DEVICE_SYNC_KEY) || "";
 }
 
 async function initCloud() {
@@ -2058,6 +2107,7 @@ async function logoutCloud() {
   cloudConfig.userId = "";
   cloudConfig.syncKey = "";
   cloudConfig.status = "local";
+  localStorage.removeItem(DEVICE_SYNC_KEY);
   saveCloudConfig();
   renderSyncStatus();
 }
@@ -3136,8 +3186,15 @@ function renderToday(collection) {
 }
 
 function renderTodayMetric(label, value) {
+  const metricClass = {
+    "К повтору": "metric-due",
+    "Новые": "metric-new",
+    "Знаю": "metric-known",
+    "Всего слов": "metric-total"
+  }[label] || "";
+
   return `
-    <article class="today-card">
+    <article class="today-card ${metricClass}">
       <span>${escapeHtml(label)}</span>
       <strong>${value}</strong>
     </article>

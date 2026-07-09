@@ -14,7 +14,7 @@
     <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
     <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=cloud-sync-6" />
+    <link rel="stylesheet" href="styles.css?v=cloud-sync-7" />
   </head>
   <body>
     <div class="app-shell">
@@ -47,6 +47,7 @@
           <button id="installButton" class="ghost-button install-button hidden" type="button">Установить</button>
           <button id="exportButton" class="ghost-button" type="button">Экспорт</button>
           <button id="importButton" class="ghost-button" type="button">Импорт</button>
+          <button id="syncCloudButton" class="ghost-button sync-button" type="button">Синхронизировать</button>
           <input id="importFile" class="file-input" type="file" accept="application/json,.json" />
         </div>
 
@@ -62,7 +63,6 @@
           <div class="cloud-actions">
             <button id="loginCloudButton" class="ghost-button" type="button">Создать код</button>
             <button id="verifyCloudButton" class="ghost-button" type="button">Подключить</button>
-            <button id="syncCloudButton" class="ghost-button" type="button">Синхронизировать</button>
             <button id="logoutCloudButton" class="ghost-button" type="button">Выйти</button>
           </div>
           <details class="cloud-advanced">
@@ -88,15 +88,15 @@
             </div>
           </div>
           <div class="stats">
-            <div>
+            <div class="stat-card stat-total">
               <strong id="totalWords">0</strong>
               <span>слов</span>
             </div>
-            <div>
+            <div class="stat-card stat-known">
               <strong id="knownWords">0</strong>
               <span>знаю</span>
             </div>
-            <div>
+            <div class="stat-card stat-due">
               <strong id="dueWords">0</strong>
               <span>к повтору</span>
             </div>
@@ -219,6 +219,6 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="script.js?v=cloud-sync-13"></script>
+    <script src="script.js?v=cloud-sync-14"></script>
   </body>
 </html>

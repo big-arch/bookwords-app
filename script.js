@@ -6,6 +6,7 @@ const CLOUD_CONFIG_KEY = "bookwords.cloudConfig.v1";
 const SYNC_QUEUE_KEY = "bookwords.syncQueue.v1";
 const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
 const CLOUD_LOGIN_NEXT_AT_KEY = "bookwords.cloudLoginNextAt.v1";
+const DEVICE_SYNC_KEY = "bookwords.deviceSyncKey.v1";
 const DEFAULT_SUPABASE_URL = "https://renbakjudvdnkjvjujti.supabase.co";
 const DEFAULT_SUPABASE_PUBLIC_KEY = "sb_publishable_tJ2cQXwiFEv-1r6wHRwndg_5hEN-h4C";
 const CLOUD_SYNC_TABLE = "bookwords_sync";
@@ -173,17 +174,19 @@ function registerPwa() {
 
 function loadCloudConfig() {
   const saved = localStorage.getItem(CLOUD_CONFIG_KEY);
+  const deviceSyncKey = localStorage.getItem(DEVICE_SYNC_KEY) || "";
 
   try {
     const parsed = saved ? JSON.parse(saved) : null;
+    const syncKey = parsed?.syncKey || parsed?.email || deviceSyncKey;
     return {
-      enabled: Boolean(parsed?.enabled),
+      enabled: Boolean(parsed?.enabled || syncKey),
       provider: parsed?.provider || "supabase",
       supabaseUrl: normalizeSupabaseUrl(parsed?.supabaseUrl || DEFAULT_SUPABASE_URL),
       supabaseAnonKey: parsed?.supabaseAnonKey || DEFAULT_SUPABASE_PUBLIC_KEY,
-      email: parsed?.email || "",
-      syncKey: parsed?.syncKey || parsed?.email || "",
-      userId: parsed?.userId || "",
+      email: syncKey,
+      syncKey,
+      userId: parsed?.userId || syncKey,
       lastSyncAt: parsed?.lastSyncAt || "",
       status: parsed?.status || "local"
     };
@@ -208,6 +211,9 @@ var supabaseClient = null;
 
 function saveCloudConfig() {
   localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+  if (cloudConfig.syncKey) {
+    localStorage.setItem(DEVICE_SYNC_KEY, cloudConfig.syncKey);
+  }
 }
 
 function getLocalUpdatedAt() {
@@ -450,7 +456,7 @@ function validateCloudSettings() {
 function hydrateCloudForm() {
   if (els.cloudUrl) els.cloudUrl.value = cloudConfig.supabaseUrl || "";
   if (els.cloudAnonKey) els.cloudAnonKey.value = cloudConfig.supabaseAnonKey || "";
-  if (els.cloudEmail) els.cloudEmail.value = cloudConfig.syncKey || cloudConfig.email || "";
+  if (els.cloudEmail) els.cloudEmail.value = cloudConfig.syncKey || cloudConfig.email || localStorage.getItem(DEVICE_SYNC_KEY) || "";
 }
 
 async function initCloud() {
@@ -589,6 +595,7 @@ async function logoutCloud() {
   cloudConfig.userId = "";
   cloudConfig.syncKey = "";
   cloudConfig.status = "local";
+  localStorage.removeItem(DEVICE_SYNC_KEY);
   saveCloudConfig();
   renderSyncStatus();
 }
@@ -1667,8 +1674,15 @@ function renderToday(collection) {
 }
 
 function renderTodayMetric(label, value) {
+  const metricClass = {
+    "К повтору": "metric-due",
+    "Новые": "metric-new",
+    "Знаю": "metric-known",
+    "Всего слов": "metric-total"
+  }[label] || "";
+
   return `
-    <article class="today-card">
+    <article class="today-card ${metricClass}">
       <span>${escapeHtml(label)}</span>
       <strong>${value}</strong>
     </article>

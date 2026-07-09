@@ -318,6 +318,21 @@ input:focus {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.stats .stat-total {
+  background: #f3f5f8;
+  border-color: rgba(104, 115, 130, 0.16);
+}
+
+.stats .stat-known {
+  background: #eaf5ee;
+  border-color: rgba(47, 143, 96, 0.18);
+}
+
+.stats .stat-due {
+  background: #f8e8e8;
+  border-color: rgba(201, 79, 100, 0.18);
+}
+
 .stats strong {
   display: block;
   font-size: 24px;
@@ -560,6 +575,14 @@ input:focus {
   grid-column: 1 / -1;
 }
 
+.sidebar-actions .sync-button {
+  grid-column: 1 / -1;
+  border-color: rgba(47, 143, 131, 0.24);
+  background: rgba(47, 143, 131, 0.1);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
 .cloud-panel {
   display: grid;
   gap: 10px;
@@ -737,6 +760,26 @@ input:focus {
   border: 1px solid rgba(31, 41, 51, 0.08);
   border-radius: 8px;
   background: #ffffff;
+}
+
+.today-card.metric-due {
+  background: #f8e8e8;
+  border-color: rgba(201, 79, 100, 0.18);
+}
+
+.today-card.metric-new {
+  background: #f8efe2;
+  border-color: rgba(217, 154, 43, 0.2);
+}
+
+.today-card.metric-known {
+  background: #eaf5ee;
+  border-color: rgba(47, 143, 96, 0.18);
+}
+
+.today-card.metric-total {
+  background: #f3f5f8;
+  border-color: rgba(104, 115, 130, 0.16);
 }
 
 .today-card span,
