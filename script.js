@@ -1893,24 +1893,20 @@ function renderQuiz(collection) {
   });
 
   els.quizCard.querySelector("#checkAnswer")?.addEventListener("click", () => {
-    checkAnswer(els.quizCard.querySelector("#quizAnswer").value, answer);
+    submitTypedQuizAnswer(answer);
   });
   els.quizCard.querySelector("#quizAnswer")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      if (quizWaitingForNext) {
-        goToNextQuizWord();
-      } else {
-        checkAnswer(event.currentTarget.value, answer);
-      }
+      event.stopPropagation();
+      submitTypedQuizAnswer(answer);
     }
   });
   els.quizCard.querySelector("#skipQuiz").addEventListener("click", () => goToNextQuizWord());
   els.quizCard.onkeydown = (event) => {
-    if (event.key === "Enter" && quizWaitingForNext) {
-      event.preventDefault();
-      goToNextQuizWord();
-    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitTypedQuizAnswer(answer);
   };
   els.quizCard.tabIndex = -1;
   focusQuizInput();
@@ -1960,6 +1956,17 @@ function goToNextQuizWord() {
     renderDailyGoal();
     renderQuiz(collection);
   }
+}
+
+function submitTypedQuizAnswer(answer) {
+  if (quizWaitingForNext) {
+    goToNextQuizWord();
+    return;
+  }
+
+  const input = els.quizCard.querySelector("#quizAnswer");
+  if (!input) return;
+  checkAnswer(input.value, answer);
 }
 
 function checkAnswer(value, answer) {

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#2f8f83" />
     <meta name="description" content="BookWords помогает учить английские слова из книг через карточки, тесты, звук и визуальные ассоциации." />
-    <meta name="app-version" content="2026-07-11-v23" />
+    <meta name="app-version" content="2026-07-11-v24" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BookWords" />
@@ -3419,24 +3419,20 @@ function renderQuiz(collection) {
   });
 
   els.quizCard.querySelector("#checkAnswer")?.addEventListener("click", () => {
-    checkAnswer(els.quizCard.querySelector("#quizAnswer").value, answer);
+    submitTypedQuizAnswer(answer);
   });
   els.quizCard.querySelector("#quizAnswer")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      if (quizWaitingForNext) {
-        goToNextQuizWord();
-      } else {
-        checkAnswer(event.currentTarget.value, answer);
-      }
+      event.stopPropagation();
+      submitTypedQuizAnswer(answer);
     }
   });
   els.quizCard.querySelector("#skipQuiz").addEventListener("click", () => goToNextQuizWord());
   els.quizCard.onkeydown = (event) => {
-    if (event.key === "Enter" && quizWaitingForNext) {
-      event.preventDefault();
-      goToNextQuizWord();
-    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitTypedQuizAnswer(answer);
   };
   els.quizCard.tabIndex = -1;
   focusQuizInput();
@@ -3486,6 +3482,17 @@ function goToNextQuizWord() {
     renderDailyGoal();
     renderQuiz(collection);
   }
+}
+
+function submitTypedQuizAnswer(answer) {
+  if (quizWaitingForNext) {
+    goToNextQuizWord();
+    return;
+  }
+
+  const input = els.quizCard.querySelector("#quizAnswer");
+  if (!input) return;
+  checkAnswer(input.value, answer);
 }
 
 function checkAnswer(value, answer) {
