@@ -1,5 +1,5 @@
 {
-  "version": "2026-07-11-v22",
+  "version": "2026-07-11-v23",
   "features": [
     "device-sync-key",
     "sidebar-sync-button",
@@ -8,6 +8,7 @@
     "google-translate-primary",
     "duplicate-word-warning",
     "quiz-pronunciation",
-    "manual-next-after-answer"
+    "manual-next-after-answer",
+    "visible-correct-answer"
   ]
 }

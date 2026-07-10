@@ -1883,6 +1883,7 @@ function renderQuiz(collection) {
         : `<div class="answer-row"><input id="quizAnswer" type="text" autocomplete="off" placeholder="Ответ" /><button class="primary" id="checkAnswer" type="button">Проверить</button></div>`
     }
     <div id="feedback" class="feedback"></div>
+    <div id="correctAnswer" class="correct-answer hidden"></div>
     <button class="ghost-button" id="skipQuiz" type="button">Следующее слово</button>
   `;
 
@@ -1968,11 +1969,16 @@ function checkAnswer(value, answer) {
   }
 
   const feedback = els.quizCard.querySelector("#feedback");
+  const correctAnswer = els.quizCard.querySelector("#correctAnswer");
   const isCorrect = normalize(value) === normalize(answer);
   playAnswerSound(isCorrect);
   const progressResult = recordLessonProgress(currentQuizWord.id, quizMode, isCorrect);
   feedback.textContent = getAnswerFeedback(isCorrect, answer, progressResult);
   feedback.className = `feedback ${isCorrect ? "good" : "bad"}`;
+  if (correctAnswer) {
+    correctAnswer.classList.toggle("hidden", isCorrect);
+    correctAnswer.innerHTML = isCorrect ? "" : `Правильно: <strong>${escapeHtml(answer)}</strong>`;
+  }
   scheduleWord(currentQuizWord, isCorrect, false);
   quizWaitingForNext = true;
 
