@@ -17,6 +17,8 @@ const DAILY_GOAL = 10;
 const MAX_STARS = 7;
 const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || "dev";
 const AI_IMAGE_ENDPOINT = "https://image.pollinations.ai/prompt/";
+const GOOGLE_TRANSLATE_ENDPOINT = "https://translate.googleapis.com/translate_a/single";
+const MYMEMORY_TRANSLATE_ENDPOINT = "https://api.mymemory.translated.net/get";
 const QUIZ_MODES = ["en-ru", "ru-en", "spell", "listen"];
 
 const fallbackTranslations = {
@@ -955,7 +957,7 @@ function normalize(value) {
 function uniqueTranslations(values) {
   const seen = new Set();
   return values
-    .map((value) => value.trim())
+    .map((value) => String(value || "").replace(/<[^>]*>/g, "").trim())
     .filter(Boolean)
     .filter((value) => {
       const key = value.toLowerCase();
@@ -966,31 +968,75 @@ function uniqueTranslations(values) {
     .slice(0, 6);
 }
 
+async function fetchJsonWithTimeout(url, timeoutMs = 2500) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error("Translation request failed");
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function parseGoogleTranslations(data) {
+  const sentenceTranslations = Array.isArray(data?.[0])
+    ? data[0].map((item) => item?.[0])
+    : [];
+
+  const dictionaryTranslations = Array.isArray(data?.[1])
+    ? data[1].flatMap((entry) => entry?.[1] || [])
+    : [];
+
+  return uniqueTranslations([...sentenceTranslations, ...dictionaryTranslations]);
+}
+
+async function fetchGoogleTranslations(query) {
+  const params = new URLSearchParams({
+    client: "gtx",
+    sl: "en",
+    tl: "ru",
+    q: query
+  });
+
+  params.append("dt", "t");
+  params.append("dt", "bd");
+  const data = await fetchJsonWithTimeout(`${GOOGLE_TRANSLATE_ENDPOINT}?${params.toString()}`);
+  return parseGoogleTranslations(data);
+}
+
+async function fetchMyMemoryTranslations(query) {
+  const params = new URLSearchParams({
+    q: query,
+    langpair: "en|ru"
+  });
+  const data = await fetchJsonWithTimeout(`${MYMEMORY_TRANSLATE_ENDPOINT}?${params.toString()}`, 1800);
+  return uniqueTranslations([
+    data.responseData?.translatedText,
+    ...(data.matches || []).map((match) => match.translation)
+  ]);
+}
+
 async function fetchTranslations(word) {
   const query = word.trim().toLowerCase();
   if (!query) return [];
 
   const fallback = fallbackTranslations[query] || [];
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 1500);
+  try {
+    const google = await fetchGoogleTranslations(query);
+    if (google.length) return uniqueTranslations([...google, ...fallback]);
+  } catch {
+    // Fallback below keeps word adding usable when Google is unavailable.
+  }
 
   try {
-    const response = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(query)}&langpair=en|ru`,
-      { signal: controller.signal }
-    );
-    if (!response.ok) throw new Error("Translation request failed");
-    const data = await response.json();
-    const online = [
-      data.responseData?.translatedText,
-      ...(data.matches || []).map((match) => match.translation)
-    ];
-    return uniqueTranslations([...online, ...fallback]);
+    const myMemory = await fetchMyMemoryTranslations(query);
+    return uniqueTranslations([...myMemory, ...fallback]);
   } catch {
     return uniqueTranslations(fallback);
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 

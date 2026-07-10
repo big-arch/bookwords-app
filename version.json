@@ -1,9 +1,10 @@
 {
-  "version": "2026-07-09-v20",
+  "version": "2026-07-11-v21",
   "features": [
     "device-sync-key",
     "sidebar-sync-button",
     "pastel-study-cards",
-    "force-fresh-pwa-update"
+    "force-fresh-pwa-update",
+    "google-translate-primary"
   ]
 }
