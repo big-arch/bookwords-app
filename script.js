@@ -89,6 +89,7 @@ let activeTab = "today";
 let cardIndex = 0;
 let quizMode = "en-ru";
 let currentQuizWord = null;
+let quizWaitingForNext = false;
 let translationTimer = null;
 let lastTranslationQuery = "";
 let autoTranslationActive = true;
@@ -926,6 +927,18 @@ function getActiveCollection() {
   }
 
   return state.collections.find((collection) => collection.id === activeCollectionId) || null;
+}
+
+function findDuplicateWord(englishWord) {
+  const normalized = normalize(englishWord);
+  if (!normalized) return null;
+
+  for (const collection of state.collections) {
+    const duplicate = collection.words.find((word) => normalize(word.en) === normalized);
+    if (duplicate) return { collection, word: duplicate };
+  }
+
+  return null;
 }
 
 function findStoredWord(word) {
@@ -1847,6 +1860,7 @@ function renderQuiz(collection) {
     return;
   }
 
+  quizWaitingForNext = false;
   currentQuizWord = pickQuizWord(words);
   const promptMap = {
     "en-ru": ["Переведи на русский", currentQuizWord.en, currentQuizWord.ru],
@@ -1862,6 +1876,7 @@ function renderQuiz(collection) {
   els.quizCard.innerHTML = `
     <p class="prompt">${label}</p>
     <h3>${escapeHtml(question)}</h3>
+    <button class="ghost-button speak-quiz" id="speakQuizWord" type="button">Слушать произношение</button>
     ${
       choices
         ? `<div class="choice-grid">${choices.map((choice) => `<button type="button" data-answer="${escapeHtml(choice)}">${escapeHtml(choice)}</button>`).join("")}</div>`
@@ -1871,6 +1886,7 @@ function renderQuiz(collection) {
     <button class="ghost-button" id="skipQuiz" type="button">Следующее слово</button>
   `;
 
+  els.quizCard.querySelector("#speakQuizWord").addEventListener("click", () => speak(currentQuizWord.en));
   els.quizCard.querySelectorAll("[data-answer]").forEach((button) => {
     button.addEventListener("click", () => checkAnswer(button.dataset.answer, answer));
   });
@@ -1881,10 +1897,21 @@ function renderQuiz(collection) {
   els.quizCard.querySelector("#quizAnswer")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      checkAnswer(event.currentTarget.value, answer);
+      if (quizWaitingForNext) {
+        goToNextQuizWord();
+      } else {
+        checkAnswer(event.currentTarget.value, answer);
+      }
     }
   });
-  els.quizCard.querySelector("#skipQuiz").addEventListener("click", () => renderQuiz(collection));
+  els.quizCard.querySelector("#skipQuiz").addEventListener("click", () => goToNextQuizWord());
+  els.quizCard.onkeydown = (event) => {
+    if (event.key === "Enter" && quizWaitingForNext) {
+      event.preventDefault();
+      goToNextQuizWord();
+    }
+  };
+  els.quizCard.tabIndex = -1;
   focusQuizInput();
 }
 
@@ -1916,13 +1943,30 @@ function buildChoices(words, answer) {
 }
 
 function getAnswerFeedback(isCorrect, answer, progressResult) {
-  if (!isCorrect) return `Почти. Правильный ответ: ${answer}`;
-  if (progressResult.completed) return "Верно. Цель дня закрыта";
-  if (progressResult.counted) return "Верно. Прогресс засчитан";
-  return "Верно. Это слово уже засчитано в этом упражнении";
+  const nextHint = "Нажми Enter, чтобы перейти дальше.";
+  if (!isCorrect) return `Почти. Правильный ответ: ${answer}. ${nextHint}`;
+  if (progressResult.completed) return `Верно. Цель дня закрыта. ${nextHint}`;
+  if (progressResult.counted) return `Верно. Прогресс засчитан. ${nextHint}`;
+  return `Верно. Это слово уже засчитано в этом упражнении. ${nextHint}`;
+}
+
+function goToNextQuizWord() {
+  const collection = getActiveCollection();
+  if (collection && activeTab === "quiz") {
+    renderTopbar(collection);
+    renderWords(collection);
+    renderCard(collection);
+    renderDailyGoal();
+    renderQuiz(collection);
+  }
 }
 
 function checkAnswer(value, answer) {
+  if (quizWaitingForNext) {
+    goToNextQuizWord();
+    return;
+  }
+
   const feedback = els.quizCard.querySelector("#feedback");
   const isCorrect = normalize(value) === normalize(answer);
   playAnswerSound(isCorrect);
@@ -1930,16 +1974,17 @@ function checkAnswer(value, answer) {
   feedback.textContent = getAnswerFeedback(isCorrect, answer, progressResult);
   feedback.className = `feedback ${isCorrect ? "good" : "bad"}`;
   scheduleWord(currentQuizWord, isCorrect, false);
-  setTimeout(() => {
-    const collection = getActiveCollection();
-    if (collection && activeTab === "quiz") {
-      renderTopbar(collection);
-      renderWords(collection);
-      renderCard(collection);
-      renderDailyGoal();
-      renderQuiz(collection);
-    }
-  }, 900);
+  quizWaitingForNext = true;
+
+  els.quizCard.querySelectorAll("[data-answer], #checkAnswer").forEach((button) => {
+    button.disabled = true;
+  });
+
+  const skipButton = els.quizCard.querySelector("#skipQuiz");
+  if (skipButton) {
+    skipButton.textContent = "Следующее слово";
+    skipButton.focus({ preventScroll: true });
+  }
 }
 
 function deleteWord(collection, wordId) {
@@ -2147,6 +2192,17 @@ els.wordForm.addEventListener("submit", (event) => {
 
   const en = els.wordEnglish.value.trim();
   const ru = els.wordRussian.value.trim();
+  const duplicate = findDuplicateWord(en);
+  if (duplicate) {
+    alert(`Слово "${duplicate.word.en}" уже есть в словаре.\n\nКнига: ${duplicate.collection.name}\nПеревод: ${duplicate.word.ru}`);
+    activeCollectionId = duplicate.collection.id;
+    mixMode = false;
+    wordSearch = duplicate.word.en;
+    if (els.wordSearch) els.wordSearch.value = duplicate.word.en;
+    render();
+    return;
+  }
+
   const image = generateWordImage(en, ru);
 
   const newWord = {

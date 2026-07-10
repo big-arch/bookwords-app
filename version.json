@@ -1,10 +1,13 @@
 {
-  "version": "2026-07-11-v21",
+  "version": "2026-07-11-v22",
   "features": [
     "device-sync-key",
     "sidebar-sync-button",
     "pastel-study-cards",
     "force-fresh-pwa-update",
-    "google-translate-primary"
+    "google-translate-primary",
+    "duplicate-word-warning",
+    "quiz-pronunciation",
+    "manual-next-after-answer"
   ]
 }
