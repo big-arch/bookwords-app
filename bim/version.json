@@ -1,0 +1,20 @@
+{
+  "app": "BIM Academy",
+  "version": "2026-07-29-v1",
+  "features": [
+    "courses-bim-revit-navisworks-autocad-civil3d",
+    "lessons-with-svg-diagrams",
+    "quiz-single-multi-bool-input",
+    "course-exam-and-mistake-review",
+    "spaced-repetition-mistakes",
+    "global-search",
+    "glossary",
+    "video-catalog-and-own-links",
+    "hotkey-cheatsheets",
+    "progress-xp-ranks-badges-streak",
+    "bookmarks",
+    "light-dark-theme",
+    "offline-pwa",
+    "export-import-progress"
+  ]
+}
