@@ -28,14 +28,11 @@ http://127.0.0.1:5176/
 
 The app can be published with GitHub Pages from the repository root.
 
-## BIM Academy (second app in this repository)
+## BIM Academy (separate repository)
 
-The `bim/` folder holds a separate mobile app (PWA) for learning BIM/ТИМ, Revit,
-Navisworks, AutoCAD and Civil 3D: lessons with vector diagrams, quizzes with
-mistake review, a glossary, video collections, hotkey cheat sheets and offline
-support. See [bim/README.md](bim/README.md).
+BIM Academy is now a separate, independent application for learning BIM/ТИМ, Revit,
+Navisworks, AutoCAD, and Civil 3D.
 
-- Published: https://big-arch.github.io/bookwords-app/bim/
-- Locally: `node server.cjs`, then http://127.0.0.1:5176/bim/index.html
-
-Both apps are independent: they use separate files, caches and local storage keys.
+- Repository: [big-arch/bim-learning-app](https://github.com/big-arch/bim-learning-app)
+- Published: https://big-arch.github.io/bim-learning-app/
+- Documentation: See [bim-learning-app README](https://github.com/big-arch/bim-learning-app/blob/main/README.md)
