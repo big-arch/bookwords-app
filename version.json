@@ -1,5 +1,5 @@
 {
-  "version": "2026-07-11-v24",
+  "version": "2026-10-16-v26",
   "features": [
     "device-sync-key",
     "sidebar-sync-button",
@@ -10,6 +10,15 @@
     "quiz-pronunciation",
     "manual-next-after-answer",
     "visible-correct-answer",
-    "enter-checks-typed-answer"
+    "enter-checks-typed-answer",
+    "warm-library-design",
+    "daily-practice-dashboard",
+    "collapsible-mobile-library",
+    "accessible-tabs-and-card-reveal",
+    "cambridge-dictionary-link",
+    "night-landscape-theme",
+    "interactive-background-and-glow",
+    "motion-pause-and-reduced-motion",
+    "circular-daily-progress"
   ]
 }

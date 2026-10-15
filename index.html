@@ -3,20 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#2f8f83" />
+    <meta name="theme-color" content="#061827" />
     <meta name="description" content="BookWords помогает учить английские слова из книг через карточки, тесты, звук и визуальные ассоциации." />
-    <meta name="app-version" content="2026-07-11-v24" />
+    <meta name="app-version" content="2026-10-16-v26" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BookWords" />
     <title>BookWords</title>
-    <link rel="icon" href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="14" fill="%231f2933"/%3E%3Cpath d="M12 18c8-4 15-2 20 4 5-6 12-8 20-4v31c-8-4-15-2-20 3-5-5-12-7-20-3V18z" fill="%23fff"/%3E%3Cpath d="M18 24c5-3 10-1 14 4 4-5 9-7 14-4M18 32c5-3 10-1 14 4 4-5 9-7 14-4M18 40c5-3 10-1 14 4 4-5 9-7 14-4" fill="none" stroke="%232f8f83" stroke-width="4" stroke-linecap="round"/%3E%3Cpath d="M32 22v30" stroke="%231f2933" stroke-width="3" stroke-linecap="round"/%3E%3C/svg%3E' />
+    <link rel="icon" href='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" rx="14" fill="%230c7c79"/%3E%3Cpath d="M12 18c8-4 15-2 20 4 5-6 12-8 20-4v31c-8-4-15-2-20 3-5-5-12-7-20-3V18z" fill="%23fff"/%3E%3Cpath d="M18 24c5-3 10-1 14 4 4-5 9-7 14-4M18 32c5-3 10-1 14 4 4-5 9-7 14-4M18 40c5-3 10-1 14 4 4-5 9-7 14-4" fill="none" stroke="%230c7c79" stroke-width="4" stroke-linecap="round"/%3E%3Cpath d="M32 22v30" stroke="%230c7c79" stroke-width="3" stroke-linecap="round"/%3E%3C/svg%3E' />
     <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
     <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=enter-check-v24" />
+    <link rel="stylesheet" href="styles.css?v=night-v26" />
+    <link rel="stylesheet" href="theme-night.css?v=night-v26" />
   </head>
   <body>
+    <div class="ambient-scene" aria-hidden="true"><div class="landscape-layer"></div><div class="aurora aurora-one"></div><div class="aurora aurora-two"></div><canvas id="ambientStars"></canvas><div class="pointer-halo"></div></div>
+    <a class="skip-link" href="#main">К содержимому</a>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
@@ -35,13 +38,17 @@
           </div>
         </div>
 
+        <button id="libraryToggle" class="library-toggle ghost-button" type="button" aria-expanded="false" aria-controls="libraryContent">Моя библиотека <span aria-hidden="true">⌄</span></button>
+        <div id="libraryContent" class="library-content">
         <form id="collectionForm" class="new-collection">
           <label for="collectionName">Новая книга</label>
           <div class="inline-form">
             <input id="collectionName" type="text" placeholder="Например: The Hobbit" autocomplete="off" />
-            <button type="submit" title="Добавить книгу">+</button>
+            <button type="submit" title="Добавить книгу" aria-label="Добавить книгу">+</button>
           </div>
         </form>
+        <div class="sidebar-tools">
+        <div class="sidebar-heading"><span>МОИ ДАННЫЕ</span></div>
 
         <div class="data-actions sidebar-actions">
           <button id="installButton" class="ghost-button install-button hidden" type="button">Установить</button>
@@ -59,7 +66,7 @@
             </span>
             <span id="cloudUserLabel" class="cloud-state">не подключено</span>
           </summary>
-          <input id="cloudEmail" type="text" placeholder="Личный код синхронизации" autocomplete="off" />
+          <input id="cloudEmail" type="text" placeholder="Личный код синхронизации" aria-label="Личный код синхронизации" autocomplete="off" />
           <div class="cloud-actions">
             <button id="loginCloudButton" class="ghost-button" type="button">Создать код</button>
             <button id="verifyCloudButton" class="ghost-button" type="button">Подключить</button>
@@ -67,18 +74,23 @@
           </div>
           <details class="cloud-advanced">
             <summary>Настройки Supabase</summary>
-            <input id="cloudUrl" type="url" placeholder="Supabase URL" autocomplete="off" />
-            <input id="cloudAnonKey" type="password" placeholder="Supabase public key" autocomplete="off" />
+            <input id="cloudUrl" type="url" placeholder="Supabase URL" aria-label="Supabase URL" autocomplete="off" />
+            <input id="cloudAnonKey" type="password" placeholder="Supabase public key" aria-label="Supabase public key" autocomplete="off" />
             <button id="saveCloudButton" class="ghost-button" type="button">Сохранить настройки</button>
           </details>
         </details>
 
+        <div class="sidebar-heading"><span>МОЯ БИБЛИОТЕКА</span><span id="collectionCount">0</span></div>
         <nav id="collectionList" class="collection-list" aria-label="Список книг"></nav>
 
         <div id="syncStatus" class="sync-status" title="Облачная синхронизация готова к подключению.">Облако: подготовлено</div>
+        </div>
+        </div>
+        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 26</span></div>
       </aside>
 
-      <main class="main">
+      <main id="main" class="main">
+        <div class="page-meta"><time id="todayDate"></time><div class="ambient-tools"><button id="motionToggle" class="ambient-toggle" type="button" aria-pressed="true" title="Включить или остановить анимацию фона"><span class="motion-indicator" aria-hidden="true"></span><span id="motionLabel">Живой фон</span></button><button id="focusSearch" class="ambient-tool" type="button" aria-label="Поиск в словаре"></button></div></div>
         <section class="topbar">
           <div>
             <p class="eyebrow">Личный словарь</p>
@@ -86,11 +98,14 @@
               <h2 id="activeTitle">Выберите книгу</h2>
               <div id="starBank" class="star-bank" aria-label="Звезды за занятия"></div>
             </div>
+            <p class="book-summary"><span class="summary-book" aria-hidden="true"></span><span id="collectionSummary">Слова из твоих историй</span><span class="summary-dot" aria-hidden="true">·</span><span>Твой ритм. Твои открытия.</span></p>
           </div>
+          <div class="header-actions">
+          <button id="addWordToggle" class="primary-button" type="button" aria-expanded="true" aria-controls="addWordPanel"><span aria-hidden="true">+</span> Добавить слово</button></div>
           <div class="stats">
             <div class="stat-card stat-total">
               <strong id="totalWords">0</strong>
-              <span>слов</span>
+              <span>всего слов</span>
             </div>
             <div class="stat-card stat-known">
               <strong id="knownWords">0</strong>
@@ -105,33 +120,31 @@
 
         <section id="emptyState" class="empty-state">
           <div class="empty-visual">
-            <span>book</span>
+            <span aria-hidden="true">Aa</span>
           </div>
           <h2>Создай первую книгу</h2>
           <p>Добавляй слова по мере чтения, а приложение будет превращать их в карточки и тренировки.</p>
         </section>
 
         <section id="workspace" class="workspace hidden">
-          <div class="panel add-panel">
-            <div class="panel-heading">
-              <h3>Добавить слово</h3>
-            </div>
+          <div id="addWordPanel" class="panel add-panel">
+            <div class="panel-heading"><div><h3><span class="add-title-icon" aria-hidden="true">+</span>Добавить слово</h3></div><button id="closeAddWord" class="icon-button" type="button" aria-label="Закрыть добавление слова">×</button></div>
             <form id="wordForm" class="word-form">
-              <input id="wordEnglish" type="text" placeholder="English word" autocomplete="off" required />
+              <label class="form-field">Английское слово<input id="wordEnglish" type="text" placeholder="Английское слово" lang="en" autocomplete="off" required /></label>
               <div class="translation-field">
-                <input id="wordRussian" type="text" placeholder="Перевод" autocomplete="off" required />
-                <div id="translationSuggestions" class="suggestions hidden" role="listbox"></div>
+                <label class="form-field">Перевод<input id="wordRussian" type="text" placeholder="Перевод" autocomplete="off" required /></label>
+                <div id="translationSuggestions" class="suggestions hidden" aria-label="Варианты перевода"></div>
               </div>
-              <input id="wordExample" type="text" placeholder="Пример из книги" autocomplete="off" />
+              <label class="form-field example-field">Контекст из книги <span class="optional">необязательно</span><input id="wordExample" type="text" placeholder="Пример из книги" autocomplete="off" /></label>
               <div id="generatedPreview" class="generated-preview" aria-live="polite"></div>
-              <button type="submit">Добавить</button>
+              <button type="submit" class="primary-button"><span aria-hidden="true">+</span>Добавить</button>
             </form>
           </div>
 
           <div class="study-strip">
             <label class="search-box">
-              <span>Поиск</span>
-              <input id="wordSearch" type="search" placeholder="Слово, перевод или пример" autocomplete="off" />
+              <span class="sr-only">Поиск по словарю</span>
+              <input id="wordSearch" type="search" placeholder="Найти слово, перевод или пример…" autocomplete="off" />
             </label>
             <div class="filter-group" aria-label="Фильтр слов">
               <button class="filter-button active" data-filter="all" type="button">Все</button>
@@ -139,39 +152,37 @@
               <button class="filter-button" data-filter="new" type="button">Новые</button>
               <button class="filter-button" data-filter="known" type="button">Знаю</button>
             </div>
-            <div class="goal-card">
-              <div>
-                <span>Цель дня</span>
-                <strong id="dailyProgress">0 / 10</strong>
-              </div>
-              <div class="goal-track"><span id="dailyProgressBar"></span></div>
-            </div>
+        <div class="goal-card">
+          <div><span>Занятие на сегодня</span><strong id="dailyProgress">0 / 40</strong></div>
+          <div class="goal-track" role="progressbar" aria-label="Дневная цель" aria-valuemin="0" aria-valuemax="40" aria-valuenow="0"><span id="dailyProgressBar"></span></div>
+          <small>10 слов · 4 упражнения · 1 звезда</small>
+        </div>
+</div>
+
+          <div class="tabs" role="tablist" aria-label="Разделы книги">
+            <button id="todayTab" class="tab active" data-tab="today" role="tab" aria-selected="true" aria-controls="todayView" type="button">Сегодня</button>
+            <button id="wordsTab" class="tab" data-tab="words" role="tab" aria-selected="false" aria-controls="wordsView" tabindex="-1" type="button">Слова <span id="wordCountBadge" class="count-badge">0</span></button>
+            <button id="cardsTab" class="tab" data-tab="cards" role="tab" aria-selected="false" aria-controls="cardsView" tabindex="-1" type="button">Карточки</button>
+            <button id="quizTab" class="tab" data-tab="quiz" role="tab" aria-selected="false" aria-controls="quizView" tabindex="-1" type="button">Тесты</button>
           </div>
 
-          <div class="tabs" role="tablist">
-            <button class="tab active" data-tab="today" type="button">Сегодня</button>
-            <button class="tab" data-tab="words" type="button">Слова</button>
-            <button class="tab" data-tab="cards" type="button">Карточки</button>
-            <button class="tab" data-tab="quiz" type="button">Тесты</button>
-          </div>
-
-          <section id="todayView" class="view active">
-            <div id="todayDashboard" class="today-dashboard"></div>
-          </section>
-
-          <section id="wordsView" class="view">
+          <section id="todayView" class="view active" role="tabpanel" aria-labelledby="todayTab"><div id="todayDashboard" class="today-dashboard"></div></section>
+          <section id="wordsView" class="view" role="tabpanel" aria-labelledby="wordsTab" hidden>
+          <div class="section-heading"><div><p class="eyebrow">ТВОИ НАХОДКИ</p><h3>Слова, которые остаются</h3></div><span>Сначала слова к повторению</span></div>
             <div id="wordList" class="word-list"></div>
           </section>
 
-          <section id="cardsView" class="view">
+          <section id="cardsView" class="view" role="tabpanel" aria-labelledby="cardsTab" hidden>
+            <div class="section-heading"><div><p class="eyebrow">ВСПОМНИ ПЕРЕД ТЕМ, КАК ОТКРЫТЬ</p><h3>Одно слово за раз</h3></div><span id="cardPosition"></span></div>
             <div class="flashcard-wrap">
-              <button id="prevCard" class="icon-button" type="button" title="Предыдущее слово">‹</button>
+              <button id="prevCard" class="icon-button" type="button" title="Предыдущее слово" aria-label="Предыдущее слово">‹</button>
               <article id="flashcard" class="flashcard"></article>
-              <button id="nextCard" class="icon-button" type="button" title="Следующее слово">›</button>
+              <button id="nextCard" class="icon-button" type="button" title="Следующее слово" aria-label="Следующее слово">›</button>
             </div>
           </section>
 
-          <section id="quizView" class="view">
+          <section id="quizView" class="view" role="tabpanel" aria-labelledby="quizTab" hidden>
+            <div class="section-heading"><div><p class="eyebrow">ПРАКТИКА ДЕЛАЕТ СЛОВА ТВОИМИ</p><h3>Твоя тренировка</h3></div><span>Enter: проверить, затем продолжить</span></div>
             <div class="quiz-layout">
               <div class="quiz-controls">
                 <button class="mode-button active" data-mode="en-ru" type="button">
@@ -210,15 +221,16 @@
           <p class="example"></p>
         </div>
         <div class="word-actions">
-          <button class="speak" type="button" title="Произнести">🔊</button>
-          <button class="bump" type="button" title="Отметить как знаю">✓</button>
-          <button class="forget" type="button" title="Повторять чаще">↺</button>
-          <button class="delete" type="button" title="Удалить">×</button>
+          <button class="speak" type="button" title="Произнести" aria-label="Произнести слово">♪</button>
+          <button class="bump" type="button" title="Отметить как знаю" aria-label="Отметить как знаю">✓</button>
+          <button class="forget" type="button" title="Повторять чаще" aria-label="Повторять чаще">↺</button>
+          <button class="delete" type="button" title="Удалить" aria-label="Удалить слово">×</button>
         </div>
       </article>
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="script.js?v=enter-check-v24"></script>
+    <script src="script.js?v=night-v26"></script>
+    <script src="ambience.js?v=night-v26"></script>
   </body>
 </html>

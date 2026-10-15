@@ -872,6 +872,7 @@ function renderDailyGoal() {
   const wordCount = collection?.words.length || 0;
   els.dailyProgress.textContent = `${completed} / ${total}`;
   els.dailyProgressBar.style.width = `${percent}%`;
+  els.dailyProgressBar.parentElement.setAttribute("aria-valuenow", completed);
   document.querySelectorAll("[data-mode-progress]").forEach((node) => {
     const mode = node.dataset.modeProgress;
     const progress = getModeProgress(mode);
@@ -888,6 +889,7 @@ function renderDailyGoal() {
 
 function renderStars(highlight = false) {
   els.starBank.innerHTML = "";
+  els.starBank.setAttribute("aria-label", `Звёзды за занятия: ${streak.stars} из ${MAX_STARS}`);
   for (let index = 0; index < MAX_STARS; index += 1) {
     const star = document.createElement("span");
     star.className = `star ${index < streak.stars ? "filled" : ""}`;
@@ -1116,6 +1118,52 @@ function requestTranslationsForCurrentWord() {
 
 function shortLabel(word) {
   return word.en.slice(0, 2);
+}
+
+function formatWordCount(value) {
+  const lastTwo = Math.abs(value) % 100;
+  const last = lastTwo % 10;
+  const noun = lastTwo >= 11 && lastTwo <= 14 ? "слов" : last === 1 ? "слово" : last >= 2 && last <= 4 ? "слова" : "слов";
+  return `${value} ${noun}`;
+}
+
+function uiIcon(name) {
+  const paths = {
+    arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
+    sound: '<path d="M11 5 6 9H3v6h3l5 4V5Zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/>',
+    write: '<path d="m15 4 5 5-10 10-6 1 1-6L15 4Zm-8 9 5 5M13 6l5 5"/>',
+    book: '<path d="M3 4c4-1 6 0 9 2 3-2 5-3 9-2v15c-4-1-6 0-9 2-3-2-5-3-9-2V4Zm9 2v15"/>',
+    refresh: '<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/>',
+    graduate: '<path d="m2 9 10-5 10 5-10 5L2 9Zm4 2v6c4 3 8 3 12 0v-6m4-2v8"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v5m10-5v5M3 11h18"/>',
+    chevron: '<path d="m9 5 7 7-7 7"/>',
+    spark: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+    cloud: '<path d="M7 18a5 5 0 0 1-1-10 6 6 0 0 1 12-1 5.5 5.5 0 0 1 0 11H7Z"/>',
+    cards: '<rect x="3" y="3" width="14" height="14" rx="2"/><path d="M8 20h11a2 2 0 0 0 2-2V8"/>',
+    chart: '<path d="M4 20V12m8 8V4m8 16V8"/>',
+    upload: '<path d="M12 16V3M7 8l5-5 5 5M4 15v5h16v-5"/>',
+    download: '<path d="M12 3v13m-5-5 5 5 5-5M4 16v5h16v-5"/>'
+  };
+  return `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.book}</svg>`;
+}
+
+function toggleWordPanel(open) {
+  const panel = document.querySelector("#addWordPanel");
+  const expanded = open ?? panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", !expanded);
+  document.querySelector("#addWordToggle").setAttribute("aria-expanded", String(expanded));
+  if (expanded) {
+    panel.scrollIntoView({ block: "nearest" });
+    els.wordEnglish.focus({ preventScroll: true });
+  } else {
+    document.querySelector("#addWordToggle").focus({ preventScroll: true });
+  }
+}
+
+function closeMobileLibrary() {
+  document.querySelector(".sidebar").classList.remove("library-open");
+  document.querySelector("#libraryToggle").setAttribute("aria-expanded", "false");
 }
 
 function statusText(score) {
@@ -1576,6 +1624,7 @@ function visualNode(word, className = "word-thumb") {
 
 function renderCollections() {
   els.collectionList.innerHTML = "";
+  document.querySelector("#collectionCount").textContent = state.collections.length;
 
   if (state.collections.length > 2) {
     const mixedButton = document.createElement("button");
@@ -1604,10 +1653,12 @@ function renderCollections() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "collection-button";
+    button.setAttribute("aria-pressed", String(!mixMode && collection.id === activeCollectionId));
     button.innerHTML = `
+      <span class="collection-cover cover-${stableSeed(collection.name) % 3}" aria-hidden="true">${uiIcon("book")}</span>
       <span>
         <strong>${escapeHtml(collection.name)}</strong>
-        <span>${collection.words.length} слов</span>
+        <span>${formatWordCount(collection.words.length)}</span>
       </span>
       <span>${collection.words.filter((word) => word.dueAt <= Date.now()).length}</span>
     `;
@@ -1616,6 +1667,7 @@ function renderCollections() {
       activeCollectionId = collection.id;
       cardIndex = 0;
       render();
+      closeMobileLibrary();
     });
 
     const deleteButton = document.createElement("button");
@@ -1638,6 +1690,14 @@ function renderTopbar(collection) {
   els.activeTitle.textContent = collection ? collection.name : "Выберите книгу";
   const words = collection?.words || [];
   els.totalWords.textContent = words.length;
+  document.querySelector("#wordCountBadge").textContent = words.length;
+  document.querySelector("#collectionSummary").textContent = formatWordCount(words.length);
+  document.querySelector("#addWordToggle").disabled = !collection || collection.mixed;
+  document.querySelector("#addWordToggle").title = collection?.mixed ? "Для добавления слова выбери конкретную книгу" : "Добавить слово в текущую книгу";
+  if (collection?.mixed) {
+    document.querySelector("#addWordPanel").classList.add("hidden");
+    document.querySelector("#addWordToggle").setAttribute("aria-expanded", "false");
+  }
   els.knownWords.textContent = words.filter((word) => word.score >= 4).length;
   els.dueWords.textContent = words.filter((word) => word.dueAt <= Date.now()).length;
   els.emptyState.classList.toggle("hidden", Boolean(collection));
@@ -1677,6 +1737,7 @@ function renderWords(collection) {
       item.querySelector(".example").textContent = collection.mixed
         ? `${word.collectionName} · ${word.example || "Без примера"}`
         : word.example || "Без примера";
+      item.querySelector(".speak").innerHTML = uiIcon("sound");
       item.querySelector(".speak").addEventListener("click", () => speak(word.en));
       item.querySelector(".bump").addEventListener("click", () => scheduleWord(word, true));
       item.querySelector(".forget").addEventListener("click", () => scheduleWord(word, false));
@@ -1693,70 +1754,56 @@ function renderWords(collection) {
 
 function renderToday(collection) {
   if (!collection) return;
-
   const words = collection.words || [];
-  const scopeText = collection.mixed ? `Смешанный режим: ${state.collections.length} папок вместе.` : "Работаем с текущей папкой.";
   const due = words.filter((word) => word.dueAt <= Date.now()).length;
   const newWords = words.filter((word) => word.score === 0).length;
   const known = words.filter((word) => word.score >= 4).length;
   const completed = QUIZ_MODES.reduce((sum, mode) => sum + getModeProgress(mode), 0);
   const total = DAILY_GOAL * QUIZ_MODES.length;
-  const percent = Math.round((completed / total) * 100);
-
+  const percent = Math.round(completed / total * 100);
+  const nextMode = QUIZ_MODES.find((mode) => getModeProgress(mode) < DAILY_GOAL) || 'en-ru';
+  const finished = completed === total;
+  const metrics = [
+    ['due', 'К повтору', due, 'refresh'],
+    ['new', 'Новые', newWords, 'write'],
+    ['known', 'Знаю', known, 'graduate'],
+    ['all', 'Всего слов', words.length, 'book']
+  ];
   els.todayDashboard.innerHTML = `
-    <section class="today-hero">
-      <div>
-        <p class="eyebrow">План на сегодня</p>
-        <h3>${escapeHtml(scopeText)}</h3>
-        <p>Закрой 4 упражнения по ${DAILY_GOAL} слов. Приложение сначала дает слова, которые еще не засчитаны в конкретном режиме.</p>
+    <section class="today-hero glow-panel">
+      <div class="hero-copy">
+        <p class="eyebrow">${uiIcon('calendar')} План на сегодня</p>
+        <h3>${finished ? 'Отличная работа. Цель достигнута.' : 'Слова становятся твоими.'}</h3>
+        <p>${finished ? 'Четыре упражнения позади, новая звезда в твоей серии. Можно вернуться к чтению или повторить знакомое.' : 'Закрой 4 упражнения по 10 слов. Сначала повторяем то, чему нужно внимание, и закрепляем новые открытия.'}</p>
+        <button class="hero-continue" data-start-mode="${nextMode}" type="button" ${words.length ? '' : 'disabled'}>${finished ? 'Повторить слова' : completed ? 'Продолжить занятие' : 'Начать занятие'} ${uiIcon('arrow')}</button>
       </div>
-      <div class="today-meter">
-        <strong>${percent}%</strong>
-        <span>${completed} / ${total}</span>
+      <div class="today-meter" role="progressbar" aria-label="Дневной план" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${completed}">
+        <svg viewBox="0 0 160 160" aria-hidden="true"><circle class="meter-track" cx="80" cy="80" r="64"/><circle class="meter-fill" cx="80" cy="80" r="64" stroke-dasharray="402.124" stroke-dashoffset="${402.124 * (1 - completed / total)}"/></svg>
+        <div><strong>${percent}%</strong><span>${completed} / ${total}</span></div>
       </div>
     </section>
-    <section class="today-cards">
-      ${renderTodayMetric("К повтору", due)}
-      ${renderTodayMetric("Новые", newWords)}
-      ${renderTodayMetric("Знаю", known)}
-      ${renderTodayMetric("Всего слов", words.length)}
+    <section class="today-metrics" aria-label="Состояние словаря">
+      ${metrics.map(([filter, label, value, icon]) => `<button class="metric-tile metric-${filter} glow-panel" type="button" data-dashboard-filter="${filter}"><span class="metric-icon" aria-hidden="true">${uiIcon(icon)}</span><span class="metric-copy"><span>${label}</span><strong>${value}</strong></span>${uiIcon('chevron')}</button>`).join('')}
     </section>
-    <section class="lesson-grid">
-      ${QUIZ_MODES.map((mode) => renderLessonCard(mode, words.length)).join("")}
-    </section>
+    <section class="lesson-grid" aria-label="Прогресс по упражнениям">${QUIZ_MODES.map((mode) => renderLessonCard(mode, words.length)).join('')}</section>
+    <div class="learning-note">${uiIcon('spark')}<span>${words.length < DAILY_GOAL ? `Для полной дневной цели добавь ещё ${DAILY_GOAL - words.length} слов. Уже добавленные можно тренировать сейчас.` : 'Одна звезда за полный дневной план. Семь звёзд за семь дней подряд.'}</span><span class="note-stars" aria-label="${streak.stars} звёзд из 7">${Array.from({length: MAX_STARS}, (_, index) => `<span class="${index < streak.stars ? 'filled' : ''}" aria-hidden="true">★</span>`).join('')}</span></div>
   `;
-
-  els.todayDashboard.querySelectorAll("[data-start-mode]").forEach((button) => {
-    button.addEventListener("click", () => {
-      setActiveTab("quiz");
+  els.todayDashboard.querySelectorAll('[data-start-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      setActiveTab('quiz');
       setQuizMode(button.dataset.startMode);
     });
   });
-}
-
-function renderTodayMetric(label, value) {
-  const metricClass = {
-    "К повтору": "metric-due",
-    "Новые": "metric-new",
-    "Знаю": "metric-known",
-    "Всего слов": "metric-total"
-  }[label] || "";
-
-  return `
-    <article class="today-card ${metricClass}">
-      <span>${escapeHtml(label)}</span>
-      <strong>${value}</strong>
-    </article>
-  `;
-}
-
-function getModeLabel(mode) {
-  return {
-    "en-ru": "EN → RU",
-    "ru-en": "RU → EN",
-    spell: "Правописание",
-    listen: "На слух"
-  }[mode];
+  els.todayDashboard.querySelectorAll('[data-dashboard-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+      wordFilter = button.dataset.dashboardFilter;
+      document.querySelectorAll('.filter-button').forEach((filter) => {
+        filter.classList.toggle('active', filter.dataset.filter === wordFilter);
+        filter.setAttribute('aria-pressed', String(filter.dataset.filter === wordFilter));
+      });
+      setActiveTab('words');
+    });
+  });
 }
 
 function renderLessonCard(mode, wordCount) {
@@ -1765,22 +1812,29 @@ function renderLessonCard(mode, wordCount) {
   const wordsMissing = Math.max(0, DAILY_GOAL - wordCount);
   const note = wordsMissing && progress >= wordCount ? `Добавь еще ${wordsMissing} слов` : left ? `Осталось ${left}` : "Готово";
   const percent = Math.round((progress / DAILY_GOAL) * 100);
+  const lesson = {
+    "en-ru": ["Английский → Русский", "Узнай значение слова", "EN"],
+    "ru-en": ["Русский → Английский", "Вспомни английское слово", "RU"],
+    spell: ["Правописание", "Закрепи слово по буквам", uiIcon("write")],
+    listen: ["На слух", "Услышь и запиши", uiIcon("sound")]
+  }[mode];
 
   return `
-    <article class="lesson-card">
-      <div>
-        <h4>${getModeLabel(mode)}</h4>
+    <article class="lesson-card glow-panel ${left ? "" : "is-complete"}">
+      <span class="lesson-icon" aria-hidden="true">${left ? lesson[2] : "✓"}</span>
+      <div class="lesson-copy">
+        <h4>${mode === "en-ru" ? "EN → RU" : mode === "ru-en" ? "RU → EN" : lesson[0]}</h4>
         <p>${note}</p>
       </div>
-      <strong>${progress} / ${DAILY_GOAL}</strong>
-      <div class="lesson-track"><span style="width: ${percent}%"></span></div>
-      <button type="button" data-start-mode="${mode}">${left ? "Начать" : "Повторить"}</button>
+      <div class="lesson-progress"><strong>${progress} <span>/ ${DAILY_GOAL}</span></strong><div class="lesson-track" role="progressbar" aria-label="${lesson[0]}" aria-valuemin="0" aria-valuemax="${DAILY_GOAL}" aria-valuenow="${progress}"><span style="width: ${percent}%"></span></div></div>
+      <button type="button" data-start-mode="${mode}" aria-label="${left ? "Начать" : "Повторить"}: ${lesson[0]}" ${wordCount ? "" : "disabled"}>${left ? "Начать" : "Повторить"} ${uiIcon("arrow")}</button>
     </article>
   `;
 }
 
 function renderCard(collection) {
   const words = collection.words;
+  document.querySelector("#cardPosition").textContent = words.length ? `${cardIndex + 1} / ${words.length}` : "";
   if (!words.length) {
     els.flashcard.innerHTML = `<div class="empty-list">Добавь слова, и здесь появятся карточки.</div>`;
     return;
@@ -1788,6 +1842,7 @@ function renderCard(collection) {
 
   cardIndex = (cardIndex + words.length) % words.length;
   const word = words[cardIndex];
+  document.querySelector("#cardPosition").textContent = `${cardIndex + 1} / ${words.length}`;
   els.flashcard.innerHTML = "";
   els.flashcard.append(visualNode(word, "card-art"));
   els.flashcard.insertAdjacentHTML(
@@ -1798,11 +1853,13 @@ function renderCard(collection) {
           <h3>${escapeHtml(word.en)}</h3>
           <p class="card-hint">Нажми, чтобы открыть перевод</p>
         </div>
-        <button class="speak-card" type="button">Слушать</button>
+        <button class="speak-card" type="button" aria-label="Произнести слово">${uiIcon("sound")}</button>
       </div>
+      <button type="button" class="ghost-button reveal-button">Показать перевод</button>
       <div class="card-reveal hidden">
         <p class="big-translation">${escapeHtml(word.ru)}</p>
         <p class="example">${escapeHtml(word.example || "Добавь пример из книги, чтобы слово жило в контексте.")}</p>
+        <p class="dictionary-links">Значения и примеры: <a href="https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(word.en.toLowerCase())}" target="_blank" rel="noopener noreferrer">Cambridge ↗</a></p>
         <div class="memory-actions">
           <button type="button" data-memory="again">Забыл</button>
           <button type="button" data-memory="hard">Трудно</button>
@@ -1816,10 +1873,13 @@ function renderCard(collection) {
     event.stopPropagation();
     speak(word.en);
   });
-  els.flashcard.addEventListener("click", () => {
+  const revealCard = () => {
     els.flashcard.querySelector(".card-reveal").classList.remove("hidden");
+    els.flashcard.querySelector(".reveal-button").classList.add("hidden");
     els.flashcard.querySelector(".card-hint").textContent = "Перевод открыт";
-  });
+  };
+  els.flashcard.onclick = revealCard;
+  els.flashcard.querySelector(".dictionary-links").addEventListener("click", (event) => event.stopPropagation());
   els.flashcard.querySelectorAll("[data-memory]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1854,6 +1914,7 @@ function applyMemoryGrade(word, grade) {
 }
 
 function renderQuiz(collection) {
+  document.querySelectorAll(".mode-button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === quizMode)));
   const words = collection.words;
   if (!words.length) {
     els.quizCard.innerHTML = `<div class="empty-list">Для теста нужно хотя бы одно слово.</div>`;
@@ -1870,20 +1931,25 @@ function renderQuiz(collection) {
   };
   const [label, question, answer] = promptMap[quizMode];
 
-  if (quizMode === "listen") setTimeout(() => speak(currentQuizWord.en), 200);
+  if (quizMode === "listen" && activeTab === "quiz") {
+    const spokenWord = currentQuizWord;
+    setTimeout(() => {
+      if (activeTab === "quiz" && quizMode === "listen" && currentQuizWord === spokenWord) speak(spokenWord.en);
+    }, 200);
+  }
 
   const choices = quizMode === "en-ru" || quizMode === "ru-en" ? buildChoices(words, answer) : "";
   els.quizCard.innerHTML = `
     <p class="prompt">${label}</p>
     <h3>${escapeHtml(question)}</h3>
-    <button class="ghost-button speak-quiz" id="speakQuizWord" type="button">Слушать произношение</button>
+    <button class="ghost-button speak-quiz" id="speakQuizWord" type="button">${uiIcon("sound")} Слушать произношение</button>
     ${
       choices
         ? `<div class="choice-grid">${choices.map((choice) => `<button type="button" data-answer="${escapeHtml(choice)}">${escapeHtml(choice)}</button>`).join("")}</div>`
-        : `<div class="answer-row"><input id="quizAnswer" type="text" autocomplete="off" placeholder="Ответ" /><button class="primary" id="checkAnswer" type="button">Проверить</button></div>`
+        : `<div class="answer-row"><input id="quizAnswer" type="text" lang="en" aria-label="Ответ на английском" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Напиши слово…" /><button class="primary" id="checkAnswer" type="button">Проверить</button></div>`
     }
-    <div id="feedback" class="feedback"></div>
-    <div id="correctAnswer" class="correct-answer hidden"></div>
+    <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+    <div id="correctAnswer" class="correct-answer hidden" aria-live="polite"></div>
     <button class="ghost-button" id="skipQuiz" type="button">Следующее слово</button>
   `;
 
@@ -1913,6 +1979,7 @@ function renderQuiz(collection) {
 }
 
 function focusQuizInput() {
+  if (activeTab !== "quiz") return;
   const input = els.quizCard.querySelector("#quizAnswer");
   if (!input) return;
 
@@ -2155,16 +2222,31 @@ function render() {
   renderToday(collection);
   renderWords(collection);
   renderCard(collection);
-  renderQuiz(collection);
+  if (activeTab === "quiz") renderQuiz(collection);
 }
 
 function setActiveTab(tabName) {
+  const previousTab = activeTab;
   activeTab = tabName;
+  document.body.classList.toggle("is-studying", tabName === "quiz");
+  document.dispatchEvent(new Event("bookwords:viewchange"));
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);
+    tab.setAttribute("aria-selected", String(tab.dataset.tab === tabName));
+    tab.tabIndex = tab.dataset.tab === tabName ? 0 : -1;
   });
-  document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
+  document.querySelectorAll(".view").forEach((view) => {
+    view.classList.remove("active");
+    view.hidden = true;
+  });
   document.querySelector(`#${tabName}View`).classList.add("active");
+  document.querySelector(`#${tabName}View`).hidden = false;
+  const collection = getActiveCollection();
+  if (collection && tabName === "today") renderToday(collection);
+  if (collection && tabName === "words") renderWords(collection);
+  if (collection && tabName === "quiz" && (previousTab !== "quiz" || !els.quizCard.children.length)) renderQuiz(collection);
+  if (tabName === "quiz") focusQuizInput();
+  if (tabName !== "quiz" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 function setQuizMode(modeName) {
@@ -2173,7 +2255,7 @@ function setQuizMode(modeName) {
     mode.classList.toggle("active", mode.dataset.mode === modeName);
   });
   const collection = getActiveCollection();
-  if (collection) renderQuiz(collection);
+  if (collection && activeTab === "quiz") renderQuiz(collection);
 }
 
 els.collectionForm.addEventListener("submit", (event) => {
@@ -2188,10 +2270,13 @@ els.collectionForm.addEventListener("submit", (event) => {
     words: []
   };
   state.collections.unshift(collection);
+  mixMode = false;
   activeCollectionId = collection.id;
   els.collectionName.value = "";
   saveState();
   render();
+  closeMobileLibrary();
+  toggleWordPanel(true);
 });
 
 ["pointerdown", "touchstart", "keydown"].forEach((eventName) => {
@@ -2205,14 +2290,19 @@ els.wordForm.addEventListener("submit", (event) => {
 
   const en = els.wordEnglish.value.trim();
   const ru = els.wordRussian.value.trim();
+  if (!en || !ru || collection.mixed) return;
   const duplicate = findDuplicateWord(en);
   if (duplicate) {
     alert(`Слово "${duplicate.word.en}" уже есть в словаре.\n\nКнига: ${duplicate.collection.name}\nПеревод: ${duplicate.word.ru}`);
     activeCollectionId = duplicate.collection.id;
     mixMode = false;
     wordSearch = duplicate.word.en;
+    wordFilter = "all";
+    document.querySelectorAll(".filter-button").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
     if (els.wordSearch) els.wordSearch.value = duplicate.word.en;
     render();
+    toggleWordPanel(false);
+    setActiveTab("words");
     return;
   }
 
@@ -2238,6 +2328,12 @@ els.wordForm.addEventListener("submit", (event) => {
   renderGeneratedPreview();
   saveState();
   render();
+  wordSearch = "";
+  els.wordSearch.value = "";
+  wordFilter = "all";
+  document.querySelectorAll(".filter-button").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
+  toggleWordPanel(false);
+  setActiveTab("words");
 });
 
 els.wordEnglish.addEventListener("input", () => {
@@ -2247,7 +2343,12 @@ els.wordEnglish.addEventListener("input", () => {
 
 els.wordRussian.addEventListener("input", () => {
   autoTranslationActive = false;
+  hideTranslationSuggestions();
   renderGeneratedPreview();
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!event.target.closest(".translation-field") && event.target !== els.wordEnglish) hideTranslationSuggestions();
 });
 
 els.wordRussian.addEventListener("focus", () => {
@@ -2256,6 +2357,7 @@ els.wordRussian.addEventListener("focus", () => {
 
 els.wordSearch.addEventListener("input", () => {
   wordSearch = els.wordSearch.value.trim();
+  if (wordSearch && activeTab !== "words") setActiveTab("words");
   const collection = getActiveCollection();
   if (collection) renderWords(collection);
 });
@@ -2295,6 +2397,7 @@ document.querySelectorAll(".filter-button").forEach((button) => {
       filter.classList.toggle("active", filter === button);
     });
     const collection = getActiveCollection();
+    if (activeTab !== "words") setActiveTab("words");
     if (collection) renderWords(collection);
   });
 });
@@ -2302,6 +2405,15 @@ document.querySelectorAll(".filter-button").forEach((button) => {
 document.querySelectorAll(".tab").forEach((button) => {
   button.addEventListener("click", () => {
     setActiveTab(button.dataset.tab);
+  });
+  button.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const tabs = [...document.querySelectorAll(".tab")];
+    const index = tabs.indexOf(button);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    setActiveTab(tabs[next].dataset.tab);
+    tabs[next].focus();
   });
 });
 
@@ -2322,6 +2434,38 @@ els.nextCard.addEventListener("click", () => {
   const collection = getActiveCollection();
   if (collection) renderCard(collection);
 });
+
+document.querySelector("#addWordToggle").addEventListener("click", () => toggleWordPanel());
+document.querySelector("#closeAddWord").addEventListener("click", () => toggleWordPanel(false));
+document.querySelector("#libraryToggle").addEventListener("click", () => {
+  const open = document.querySelector(".sidebar").classList.toggle("library-open");
+  document.querySelector("#libraryToggle").setAttribute("aria-expanded", String(open));
+});
+document.querySelector("#addWordPanel").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") toggleWordPanel(false);
+});
+const todayDate = document.querySelector("#todayDate");
+todayDate.textContent = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", weekday: "long" }).format(new Date());
+todayDate.dateTime = getTodayKey();
+
+document.querySelector("#focusSearch").innerHTML = uiIcon("search");
+document.querySelector("#focusSearch").addEventListener("click", () => {
+  setActiveTab("words");
+  els.wordSearch.focus();
+});
+document.querySelector(".summary-book").innerHTML = uiIcon("book");
+document.querySelector(".search-box").insertAdjacentHTML("afterbegin", uiIcon("search"));
+els.wordEnglish.parentElement.insertAdjacentHTML("afterbegin", '<span class="field-symbol" aria-hidden="true">A</span>');
+els.wordRussian.parentElement.insertAdjacentHTML("afterbegin", `<span class="field-symbol" aria-hidden="true">${uiIcon("spark")}</span>`);
+els.wordExample.parentElement.insertAdjacentHTML("afterbegin", `<span class="field-symbol" aria-hidden="true">${uiIcon("write")}</span>`);
+document.querySelector("#exportButton").insertAdjacentHTML("afterbegin", uiIcon("upload"));
+document.querySelector("#importButton").insertAdjacentHTML("afterbegin", uiIcon("download"));
+document.querySelector("#syncCloudButton").insertAdjacentHTML("afterbegin", uiIcon("cloud"));
+document.querySelector(".stat-total").insertAdjacentHTML("afterbegin", uiIcon("book"));
+document.querySelector(".stat-known").insertAdjacentHTML("afterbegin", uiIcon("graduate"));
+document.querySelector(".stat-due").insertAdjacentHTML("afterbegin", uiIcon("refresh"));
+const tabIcons = { today: "calendar", words: "book", cards: "cards", quiz: "chart" };
+document.querySelectorAll(".tab").forEach((tab) => tab.insertAdjacentHTML("afterbegin", uiIcon(tabIcons[tab.dataset.tab])));
 
 render();
 renderGeneratedPreview();
