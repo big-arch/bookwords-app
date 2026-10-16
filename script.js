@@ -1914,6 +1914,8 @@ function applyMemoryGrade(word, grade) {
 }
 
 function renderQuiz(collection) {
+  els.quizCard.classList.remove("answer-correct", "answer-incorrect");
+  delete els.quizCard.dataset.verdict;
   document.querySelectorAll(".mode-button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === quizMode)));
   const words = collection.words;
   if (!words.length) {
@@ -1940,6 +1942,7 @@ function renderQuiz(collection) {
 
   const choices = quizMode === "en-ru" || quizMode === "ru-en" ? buildChoices(words, answer) : "";
   els.quizCard.innerHTML = `
+    <div class="answer-effect" aria-hidden="true"></div>
     <p class="prompt">${label}</p>
     <h3>${escapeHtml(question)}</h3>
     <button class="ghost-button speak-quiz" id="speakQuizWord" type="button">${uiIcon("sound")} Слушать произношение</button>
@@ -2053,6 +2056,7 @@ function checkAnswer(value, answer) {
     correctAnswer.classList.toggle("hidden", isCorrect);
     correctAnswer.innerHTML = isCorrect ? "" : `Правильно: <strong>${escapeHtml(answer)}</strong>`;
   }
+  showAnswerAnimation(isCorrect, value, answer);
   scheduleWord(currentQuizWord, isCorrect, false);
   quizWaitingForNext = true;
 
@@ -2065,6 +2069,34 @@ function checkAnswer(value, answer) {
     skipButton.textContent = "Следующее слово";
     skipButton.focus({ preventScroll: true });
   }
+}
+
+function showAnswerAnimation(isCorrect, value, answer) {
+  const card = els.quizCard;
+  card.dataset.verdict = isCorrect ? "correct" : "incorrect";
+  card.classList.toggle("answer-correct", isCorrect);
+  card.classList.toggle("answer-incorrect", !isCorrect);
+
+  const effect = card.querySelector(".answer-effect");
+  if (effect) {
+    const icon = isCorrect
+      ? '<path class="verdict-stroke" pathLength="1" d="m8 16 5 5L25 9"/>'
+      : '<path class="verdict-stroke" pathLength="1" d="m10 10 12 12m0-12L10 22"/>';
+    const particles = isCorrect ? Array.from({ length: 8 }, (_, index) => {
+      const angle = index * Math.PI / 4;
+      const distance = 34 + (index % 2) * 10;
+      return `<i class="answer-spark" style="--spark-x:${(Math.cos(angle) * distance).toFixed(1)}px;--spark-y:${(Math.sin(angle) * distance).toFixed(1)}px;--spark-delay:${index % 3 * 25}ms"></i>`;
+    }).join("") : "";
+    effect.innerHTML = `<span class="verdict-halo"></span><span class="verdict-ring"></span><span class="verdict-symbol"><svg viewBox="0 0 32 32">${icon}</svg></span>${particles}`;
+  }
+
+  card.querySelector("#quizAnswer")?.setAttribute("aria-invalid", String(!isCorrect));
+  card.querySelectorAll("[data-answer]").forEach((button) => {
+    const correctChoice = normalize(button.dataset.answer) === normalize(answer);
+    const chosenWrong = !isCorrect && normalize(button.dataset.answer) === normalize(value);
+    button.classList.toggle("answer-choice-correct", correctChoice);
+    button.classList.toggle("answer-choice-wrong", chosenWrong);
+  });
 }
 
 function deleteWord(collection, wordId) {

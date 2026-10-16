@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#061827" />
     <meta name="description" content="BookWords помогает учить английские слова из книг через карточки, тесты, звук и визуальные ассоциации." />
-    <meta name="app-version" content="2026-10-16-v26" />
+    <meta name="app-version" content="2026-10-16-v27" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BookWords" />
@@ -3942,6 +3942,279 @@ body {
 .field-symbol { position: absolute; top: 50%; transform: translateY(-50%); left: 13px; font-size: 18px; color: #a7c8e7; pointer-events: none; }
 .field-symbol .ui-icon { height: 18px; width: 18px; }
 .form-field input { padding-left: 38px; }
+/* Answer feedback: one short effect per submitted word, no timers or navigation delays. */
+.quiz-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.quiz-card > :not(.answer-effect) {
+  position: relative;
+  z-index: 1;
+}
+.quiz-card .prompt {
+  padding-right: 60px;
+  min-height: 22px;
+}
+.quiz-card.answer-correct {
+  --verdict-color: #58e9c7;
+  --verdict-glow: #1de8bc;
+  border-color: #36d4b58c;
+  box-shadow: inset 0 0 0 1px #2fdbbd16, 0 0 30px #12d6b012, var(--shadow);
+}
+.quiz-card.answer-incorrect {
+  --verdict-color: #ff9ebc;
+  --verdict-glow: #f077aa;
+  border-color: #d381a48c;
+  box-shadow: inset 0 0 0 1px #eb8fb21a, 0 0 24px #c65a8e0c, var(--shadow);
+}
+.quiz-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at 100% 0%,color-mix(in srgb,var(--verdict-glow,transparent) 15%,transparent),transparent 65%);
+}
+.quiz-card[data-verdict]::before {
+  animation: verdict-wash 500ms var(--ease-out) both;
+}
+.answer-effect {
+  position: absolute;
+  top: 17px;
+  right: 20px;
+  width: 46px;
+  height: 46px;
+  z-index: 2;
+  pointer-events: none;
+  color: var(--verdict-color);
+}
+.answer-effect:empty {
+  display: none;
+}
+.verdict-symbol {
+  position: absolute;
+  inset: 3px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb,var(--verdict-color) 55%,transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb,var(--verdict-glow) 12%,#0a263a);
+  box-shadow: 0 0 18px color-mix(in srgb,var(--verdict-glow) 17%,transparent),inset 0 1px #c8fff52b;
+  animation: verdict-arrive 240ms var(--ease-out) both;
+}
+.verdict-symbol svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.verdict-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: verdict-draw 260ms ease-out 70ms both;
+}
+.verdict-halo {
+  position: absolute;
+  inset: -25px;
+  border-radius: 50%;
+  background: radial-gradient(circle,color-mix(in srgb,var(--verdict-glow) 23%,transparent),transparent 67%);
+  animation: verdict-breathe 500ms ease-out both;
+}
+.verdict-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb,var(--verdict-color) 65%,transparent);
+  border-radius: 50%;
+  animation: verdict-ripple 500ms var(--ease-out) both;
+}
+.answer-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #b5fff0;
+  box-shadow: 0 0 7px #46edcfa6;
+  opacity: 0;
+  animation: verdict-spark 580ms ease-out var(--spark-delay) both;
+}
+.answer-spark:nth-of-type(even) {
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+}
+.quiz-card.answer-correct .feedback,.quiz-card.answer-incorrect .feedback {
+  animation: verdict-caption 220ms var(--ease-out) both;
+}
+.quiz-card.answer-correct .feedback {
+  color: #7ef5d7;
+}
+.quiz-card.answer-incorrect .feedback {
+  color: #ffb1ca;
+}
+.quiz-card.answer-incorrect .correct-answer {
+  border-color: #dd8eae88;
+  background: linear-gradient(110deg,#a44d7336,#71334e16);
+  animation: verdict-caption 260ms var(--ease-out) both;
+}
+.quiz-card.answer-incorrect .answer-row {
+  animation: verdict-nudge 260ms ease-out;
+}
+.quiz-card.answer-correct #quizAnswer {
+  border-color: #3cdbb3;
+  background: #0e3c3f88;
+  box-shadow: 0 0 0 2px #13cfa81a;
+}
+.quiz-card.answer-incorrect #quizAnswer {
+  border-color: #e891b3;
+  background: #3b29467a;
+  box-shadow: 0 0 0 2px #cf63901a;
+}
+.quiz-card .choice-grid button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+.quiz-card .choice-grid button.answer-choice-correct:disabled {
+  border-color: #4ae0b9;
+  color: #b4ffeb;
+  background: #0c6f5752;
+  box-shadow: inset 0 0 18px #0de9b30a;
+  opacity: 1;
+}
+.quiz-card .choice-grid button.answer-choice-wrong:disabled {
+  border-color: #ec95b7;
+  color: #ffbdd3;
+  background: #8c426148;
+  opacity: 1;
+  animation: verdict-nudge 260ms ease-out;
+}
+.quiz-card.answer-correct #skipQuiz {
+  border-color: #268a7b88;
+  color: #9cf5df;
+}
+.quiz-card.answer-incorrect #skipQuiz {
+  border-color: #85627b99;
+  color: #e2cedd;
+}
+@keyframes verdict-arrive {
+  from {
+    opacity: 0;
+    transform: scale(.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes verdict-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes verdict-wash {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: .45;
+  }
+}
+@keyframes verdict-breathe {
+  0% {
+    opacity: 0;
+    transform: scale(.6);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: .25;
+    transform: scale(1.15);
+  }
+}
+@keyframes verdict-ripple {
+  from {
+    transform: scale(.7);
+    opacity: .65;
+  }
+  to {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+@keyframes verdict-spark {
+  0% {
+    transform: translate(-50%,-50%) scale(.4);
+    opacity: 0;
+  }
+  18% {
+    opacity: .85;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--spark-x)),calc(-50% + var(--spark-y))) scale(.25);
+    opacity: 0;
+  }
+}
+@keyframes verdict-caption {
+  from {
+    opacity: .2;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes verdict-nudge {
+  0%,100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  60% {
+    transform: translateX(2px);
+  }
+}
+@media (max-width:480px) {
+  .answer-effect {
+    right: 16px;
+    top: 16px;
+    width: 40px;
+    height: 40px;
+  }
+  .verdict-symbol svg {
+    width: 25px;
+    height: 25px;
+  }
+  .quiz-card .prompt {
+    padding-right: 48px;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .answer-spark,.verdict-ring,.verdict-halo {
+    display: none;
+  }
+  .quiz-card[data-verdict]::before {
+    animation: none;
+    opacity: .35;
+  }
+  .verdict-symbol,.verdict-stroke,.quiz-card .feedback,.quiz-card .correct-answer,.quiz-card .answer-row,.quiz-card .choice-grid button {
+    animation: none !important;
+  }
+}
 
 </style>
   </head>
@@ -4014,7 +4287,7 @@ body {
         <div id="syncStatus" class="sync-status" title="Облачная синхронизация готова к подключению.">Облако: подготовлено</div>
         </div>
         </div>
-        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 26</span></div>
+        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 27</span></div>
       </aside>
 
       <main id="main" class="main">
@@ -6075,6 +6348,8 @@ function applyMemoryGrade(word, grade) {
 }
 
 function renderQuiz(collection) {
+  els.quizCard.classList.remove("answer-correct", "answer-incorrect");
+  delete els.quizCard.dataset.verdict;
   document.querySelectorAll(".mode-button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === quizMode)));
   const words = collection.words;
   if (!words.length) {
@@ -6101,6 +6376,7 @@ function renderQuiz(collection) {
 
   const choices = quizMode === "en-ru" || quizMode === "ru-en" ? buildChoices(words, answer) : "";
   els.quizCard.innerHTML = `
+    <div class="answer-effect" aria-hidden="true"></div>
     <p class="prompt">${label}</p>
     <h3>${escapeHtml(question)}</h3>
     <button class="ghost-button speak-quiz" id="speakQuizWord" type="button">${uiIcon("sound")} Слушать произношение</button>
@@ -6214,6 +6490,7 @@ function checkAnswer(value, answer) {
     correctAnswer.classList.toggle("hidden", isCorrect);
     correctAnswer.innerHTML = isCorrect ? "" : `Правильно: <strong>${escapeHtml(answer)}</strong>`;
   }
+  showAnswerAnimation(isCorrect, value, answer);
   scheduleWord(currentQuizWord, isCorrect, false);
   quizWaitingForNext = true;
 
@@ -6226,6 +6503,34 @@ function checkAnswer(value, answer) {
     skipButton.textContent = "Следующее слово";
     skipButton.focus({ preventScroll: true });
   }
+}
+
+function showAnswerAnimation(isCorrect, value, answer) {
+  const card = els.quizCard;
+  card.dataset.verdict = isCorrect ? "correct" : "incorrect";
+  card.classList.toggle("answer-correct", isCorrect);
+  card.classList.toggle("answer-incorrect", !isCorrect);
+
+  const effect = card.querySelector(".answer-effect");
+  if (effect) {
+    const icon = isCorrect
+      ? '<path class="verdict-stroke" pathLength="1" d="m8 16 5 5L25 9"/>'
+      : '<path class="verdict-stroke" pathLength="1" d="m10 10 12 12m0-12L10 22"/>';
+    const particles = isCorrect ? Array.from({ length: 8 }, (_, index) => {
+      const angle = index * Math.PI / 4;
+      const distance = 34 + (index % 2) * 10;
+      return `<i class="answer-spark" style="--spark-x:${(Math.cos(angle) * distance).toFixed(1)}px;--spark-y:${(Math.sin(angle) * distance).toFixed(1)}px;--spark-delay:${index % 3 * 25}ms"></i>`;
+    }).join("") : "";
+    effect.innerHTML = `<span class="verdict-halo"></span><span class="verdict-ring"></span><span class="verdict-symbol"><svg viewBox="0 0 32 32">${icon}</svg></span>${particles}`;
+  }
+
+  card.querySelector("#quizAnswer")?.setAttribute("aria-invalid", String(!isCorrect));
+  card.querySelectorAll("[data-answer]").forEach((button) => {
+    const correctChoice = normalize(button.dataset.answer) === normalize(answer);
+    const chosenWrong = !isCorrect && normalize(button.dataset.answer) === normalize(value);
+    button.classList.toggle("answer-choice-correct", correctChoice);
+    button.classList.toggle("answer-choice-wrong", chosenWrong);
+  });
 }
 
 function deleteWord(collection, wordId) {
