@@ -2325,3 +2325,36 @@ body {
 .sync-conflict button { width: 100%; margin-top: 8px; white-space: normal; }
 .sync-conflict[hidden] { display: none; }
 .cloud-panel > button { width: 100%; white-space: normal; margin-top: 8px; }
+
+/* Book excerpts remain the visual focus of contextual practice. */
+.context-invitation {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  margin-top: 16px; padding: 24px; border: 1px solid #276470; border-radius: 18px;
+  background: linear-gradient(120deg, #10333e, #0b1b30);
+}
+.context-invitation h3 { margin: 8px 0; font-size: clamp(20px, 2vw, 28px); }
+.context-invitation p { color: #b6cddd; line-height: 1.6; margin: 0; }
+.context-invitation button { flex-shrink: 0; }
+.context-source { color: #80d4c8; font-size: 13px; margin: 12px 0; padding-right: 48px; }
+.context-sentence {
+  margin: 20px 0; padding: 16px 0 16px 22px; border-left: 3px solid #37c9b3;
+  color: #f0f7ff; font-size: clamp(23px, 3vw, 34px); line-height: 1.65;
+  font-family: Georgia, 'Times New Roman', serif; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.context-blank { display: inline-block; min-width: 90px; padding: 0 12px; border-bottom: 2px solid #41d8c5; border-radius: 7px 7px 0 0; background: #1b716d40; color: #72eddb; text-align: center; }
+.context-sentence mark { background: #1b716d55; color: #91f1db; padding: 0 4px; border-radius: 4px; }
+.context-help { color: #b6cddd; line-height: 1.6; }
+.context-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.context-editor { display: grid; gap: 10px; margin-top: 22px; }
+.context-editor label { color: #b6cddd; font-size: 14px; }
+.context-editor select,.context-editor textarea { width: 100%; min-width: 0; padding: 12px; border: 1px solid #355a76; border-radius: 10px; color: #edf6ff; background: #0d2437; font: inherit; }
+.context-editor textarea { resize: vertical; line-height: 1.6; }
+#speakContext { display: flex; margin-top: 16px; gap: 8px; align-items: center; }
+#speakContext svg { width: 20px; height: 20px; }
+.quiz-card.answer-correct .correct-answer { border-color: #35bfa488; background: #126c5b33; }
+.quiz-card.answer-correct .correct-answer strong { color: #83efd1; }
+@media (max-width: 650px) {
+  .context-invitation { flex-direction: column; align-items: stretch; padding: 20px; gap: 16px; }
+  .context-sentence { padding-left: 14px; font-size: 24px; }
+  .context-editor button,.context-actions button { width: 100%; white-space: normal; }
+}

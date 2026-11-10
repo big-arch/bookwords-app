@@ -17,6 +17,7 @@ const nightCss = fs.readFileSync(path.join(root, "theme-night.css"), "utf8")
 const ambience = fs.readFileSync(path.join(root, "ambience.js"), "utf8");
 
 const portable = html
+  .replace(/<script src="context-lesson\.js(?:\?v=[^"]+)?"><\/script>/, () => `<script>\n${fs.readFileSync(path.join(root, "context-lesson.js"), "utf8")}\n</script>`)
   .replace(/<script src="sync-engine\.js(?:\?v=[^"]+)?"><\/script>/, () => `<script>\n${fs.readFileSync(path.join(root, "sync-engine.js"), "utf8")}\n</script>`)
   .replace(/<link rel="stylesheet" href="styles\.css(?:\?v=[^"]+)?" \/>/, () => `<style>\n${css}\n</style>`)
   .replace(/<link rel="stylesheet" href="theme-night\.css(?:\?v=[^"]+)?" \/>/, () => `<style>\n${nightCss}\n</style>`)

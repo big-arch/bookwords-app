@@ -16,6 +16,7 @@ const AI_IMAGE_ENDPOINT = "https://image.pollinations.ai/prompt/";
 const GOOGLE_TRANSLATE_ENDPOINT = "https://translate.googleapis.com/translate_a/single";
 const MYMEMORY_TRANSLATE_ENDPOINT = "https://api.mymemory.translated.net/get";
 const QUIZ_MODES = ["en-ru", "ru-en", "spell", "listen"];
+const ALL_LESSON_MODES = [...QUIZ_MODES, "context"];
 
 const fallbackTranslations = {
   apple: ["яблоко"],
@@ -84,6 +85,7 @@ let mixMode = false;
 let activeTab = "today";
 let cardIndex = 0;
 let quizMode = "en-ru";
+let contextReview = false;
 let currentQuizWord = null;
 let quizWaitingForNext = false;
 let translationTimer = null;
@@ -606,7 +608,7 @@ function createEmptyDailyGoal() {
   return {
     date: getTodayKey(),
     completed: false,
-    modes: Object.fromEntries(QUIZ_MODES.map((mode) => [mode, []]))
+    modes: Object.fromEntries(ALL_LESSON_MODES.map((mode) => [mode, []]))
   };
 }
 
@@ -614,7 +616,7 @@ function normalizeDailyGoal(goal) {
   const normalized = createEmptyDailyGoal();
   if (!goal || goal.date !== normalized.date) return normalized;
 
-  QUIZ_MODES.forEach((mode) => {
+  ALL_LESSON_MODES.forEach((mode) => {
     normalized.modes[mode] = Array.isArray(goal.modes?.[mode]) ? goal.modes[mode] : [];
   });
   normalized.completed = Boolean(goal.completed);
@@ -672,7 +674,7 @@ function isDailyGoalComplete() {
 }
 
 function recordLessonProgress(wordId, mode, isCorrect) {
-  if (!isCorrect || !QUIZ_MODES.includes(mode)) {
+  if (!isCorrect || !ALL_LESSON_MODES.includes(mode)) {
     renderDailyGoal();
     return { counted: false, completed: dailyGoal.completed };
   }
@@ -720,6 +722,11 @@ function renderDailyGoal() {
   els.dailyProgressBar.parentElement.setAttribute("aria-valuenow", completed);
   document.querySelectorAll("[data-mode-progress]").forEach((node) => {
     const mode = node.dataset.modeProgress;
+    if (mode === "context") {
+      const words = BookWordsContext.eligible(collection?.words || []);
+      node.textContent = `${getContextProgress(words)} / ${Math.min(DAILY_GOAL, words.length)} сегодня`;
+      return;
+    }
     const progress = getModeProgress(mode);
     const left = Math.max(0, DAILY_GOAL - progress);
     const wordsMissing = Math.max(0, DAILY_GOAL - wordCount);
@@ -1631,6 +1638,10 @@ function renderToday(collection) {
       ${metrics.map(([filter, label, value, icon]) => `<button class="metric-tile metric-${filter} glow-panel" type="button" data-dashboard-filter="${filter}"><span class="metric-icon" aria-hidden="true">${uiIcon(icon)}</span><span class="metric-copy"><span>${label}</span><strong>${value}</strong></span>${uiIcon('chevron')}</button>`).join('')}
     </section>
     <section class="lesson-grid" aria-label="Прогресс по упражнениям">${QUIZ_MODES.map((mode) => renderLessonCard(mode, words.length)).join('')}</section>
+    <section class="context-invitation glow-panel" aria-label="Слова в контексте">
+      <div><p class="eyebrow">${uiIcon('book')} Практика по твоей книге</p><h3>Вспомни слово внутри истории</h3><p>Заполни пропуск в сохранённом предложении. ${BookWordsContext.eligible(words).length} слов с подходящими примерами.</p></div>
+      <button class="primary-button" data-start-mode="context" type="button">В контексте ${uiIcon('arrow')}</button>
+    </section>
     <div class="learning-note">${uiIcon('spark')}<span>${words.length < DAILY_GOAL ? `Для полной дневной цели добавь ещё ${DAILY_GOAL - words.length} слов. Уже добавленные можно тренировать сейчас.` : 'Одна звезда за полный дневной план. Семь звёзд за семь дней подряд.'}</span><span class="note-stars" aria-label="${streak.stars} звёзд из 7">${Array.from({length: MAX_STARS}, (_, index) => `<span class="${index < streak.stars ? 'filled' : ''}" aria-hidden="true">★</span>`).join('')}</span></div>
   `;
   els.todayDashboard.querySelectorAll('[data-start-mode]').forEach((button) => {
@@ -1758,11 +1769,60 @@ function applyMemoryGrade(word, grade) {
   }
 }
 
+function getContextProgress(words) {
+  const completed = new Set(dailyGoal.modes.context || []);
+  return Math.min(DAILY_GOAL, words.filter(word => completed.has(word.id)).length);
+}
+
+function contextSentence(question, reveal = false) {
+  return question.parts.map(part => part.blank
+    ? reveal ? `<mark>${escapeHtml(part.text)}</mark>` : '<span class="context-blank" aria-label="пропущенное слово">•••</span>'
+    : escapeHtml(part.text)).join('');
+}
+
+function renderContextEditor(collection) {
+  quizWaitingForNext = false; currentQuizWord = null; els.quizCard.onkeydown = null;
+  if (!collection.words.length) {
+    els.quizCard.innerHTML = '<div class="empty-list"><h3>Начни со слова из книги</h3><p>Добавь английское слово, перевод и предложение с этим словом. Затем возвращайся к тренировке.</p></div>';
+    return;
+  }
+  els.quizCard.innerHTML = `<p class="prompt">Пример из твоей книги</p><h3>Дай слову контекст</h3>
+    <p class="context-help">Выбери слово и вставь английское предложение, где оно встречается в той же форме. Например: forest → We walked through the forest.</p>
+    <form id="contextExampleForm" class="context-editor">
+      <label for="contextWord">Слово</label><select id="contextWord">${collection.words.map(w => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.en)} — ${escapeHtml(w.ru)}</option>`).join('')}</select>
+      <label for="contextExample">Предложение из книги</label><textarea id="contextExample" rows="4" maxlength="2000" required></textarea>
+      <p id="contextExampleError" class="feedback bad" role="status"></p>
+      <button class="primary" type="submit">Сохранить пример и заниматься</button>
+    </form>`;
+  const select = els.quizCard.querySelector('#contextWord');
+  const field = els.quizCard.querySelector('#contextExample');
+  const hydrate = () => { field.value = collection.words.find(w => w.id === select.value)?.example || ''; };
+  hydrate(); select.addEventListener('change', hydrate);
+  els.quizCard.querySelector('form').addEventListener('submit', event => {
+    event.preventDefault();
+    const word = collection.words.find(w => w.id === select.value);
+    if (!word || !BookWordsContext.create({...word, example:field.value})) {
+      els.quizCard.querySelector('#contextExampleError').textContent = 'Нужно предложение, содержащее выбранное слово целиком, а не только само слово.';
+      return;
+    }
+    findStoredWord(word).example = field.value.trim();
+    saveState(); contextReview = false; renderQuiz(getActiveCollection());
+  });
+}
+
 function renderQuiz(collection) {
   els.quizCard.classList.remove("answer-correct", "answer-incorrect");
   delete els.quizCard.dataset.verdict;
   document.querySelectorAll(".mode-button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.mode === quizMode)));
-  const words = collection.words;
+  const words = quizMode === 'context' ? BookWordsContext.eligible(collection.words) : collection.words;
+  if (quizMode === 'context' && !words.length) { renderContextEditor(collection); return; }
+  if (quizMode === 'context' && !contextReview && getContextProgress(words) >= Math.min(DAILY_GOAL, words.length)) {
+    quizWaitingForNext = false; currentQuizWord = null; els.quizCard.onkeydown = null;
+    els.quizCard.innerHTML = `<p class="prompt">Практика завершена</p><h3>Слова снова стали частью истории.</h3><p class="context-help">Сегодня в этой книге: ${getContextProgress(words)} / ${Math.min(DAILY_GOAL, words.length)}. Можно повторить примеры или добавить новые.</p><div class="context-actions"><button id="repeatContext" class="primary" type="button">Повторить ещё</button><button id="editContext" class="ghost-button" type="button">Добавить примеры</button></div>`;
+    els.quizCard.querySelector('#repeatContext').onclick = () => { contextReview = true; renderQuiz(collection); };
+    els.quizCard.querySelector('#editContext').onclick = () => renderContextEditor(collection);
+    return;
+  }
   if (!words.length) {
     els.quizCard.innerHTML = `<div class="empty-list">Для теста нужно хотя бы одно слово.</div>`;
     return;
@@ -1774,7 +1834,8 @@ function renderQuiz(collection) {
     "en-ru": ["Переведи на русский", currentQuizWord.en, currentQuizWord.ru],
     "ru-en": ["Переведи на английский", currentQuizWord.ru, currentQuizWord.en],
     spell: ["Напиши слово по буквам", currentQuizWord.ru, currentQuizWord.en],
-    listen: ["Определи слово на слух", "Нажми кнопку и слушай", currentQuizWord.en]
+    listen: ["Определи слово на слух", "Нажми кнопку и слушай", currentQuizWord.en],
+    context: ["Вставь слово из своего словаря", "", currentQuizWord.en]
   };
   const [label, question, answer] = promptMap[quizMode];
 
@@ -1789,8 +1850,7 @@ function renderQuiz(collection) {
   els.quizCard.innerHTML = `
     <div class="answer-effect" aria-hidden="true"></div>
     <p class="prompt">${label}</p>
-    <h3>${escapeHtml(question)}</h3>
-    <button class="ghost-button speak-quiz" id="speakQuizWord" type="button">${uiIcon("sound")} Слушать произношение</button>
+    ${quizMode === 'context' ? `<p class="context-source">${escapeHtml(currentQuizWord.collectionName || collection.name)} · ${getContextProgress(words)} / ${Math.min(DAILY_GOAL, words.length)} сегодня</p><blockquote class="context-sentence" lang="en">${contextSentence(BookWordsContext.create(currentQuizWord))}</blockquote><p class="context-help">Вспомни слово по смыслу предложения.</p>` : `<h3>${escapeHtml(question)}</h3><button class="ghost-button speak-quiz" id="speakQuizWord" type="button">${uiIcon("sound")} Слушать произношение</button>`}
     ${
       choices
         ? `<div class="choice-grid">${choices.map((choice) => `<button type="button" data-answer="${escapeHtml(choice)}">${escapeHtml(choice)}</button>`).join("")}</div>`
@@ -1801,7 +1861,7 @@ function renderQuiz(collection) {
     <button class="ghost-button" id="skipQuiz" type="button">Следующее слово</button>
   `;
 
-  els.quizCard.querySelector("#speakQuizWord").addEventListener("click", () => speak(currentQuizWord.en));
+  els.quizCard.querySelector("#speakQuizWord")?.addEventListener("click", () => speak(currentQuizWord.en));
   els.quizCard.querySelectorAll("[data-answer]").forEach((button) => {
     button.addEventListener("click", () => checkAnswer(button.dataset.answer, answer));
   });
@@ -1819,6 +1879,7 @@ function renderQuiz(collection) {
   els.quizCard.querySelector("#skipQuiz").addEventListener("click", () => goToNextQuizWord());
   els.quizCard.onkeydown = (event) => {
     if (event.key !== "Enter") return;
+    if (event.target.closest('button')) return;
     event.preventDefault();
     submitTypedQuizAnswer(answer);
   };
@@ -1857,6 +1918,7 @@ function buildChoices(words, answer) {
 function getAnswerFeedback(isCorrect, answer, progressResult) {
   const nextHint = "Нажми Enter, чтобы перейти дальше.";
   if (!isCorrect) return `Почти. Правильный ответ: ${answer}. ${nextHint}`;
+  if (quizMode === 'context') return `Верно. ${progressResult.counted ? 'Слово засчитано в практике по контексту.' : 'Ты уже вспомнил это слово сегодня.'} ${nextHint}`;
   if (progressResult.completed) return `Верно. Цель дня закрыта. ${nextHint}`;
   if (progressResult.counted) return `Верно. Прогресс засчитан. ${nextHint}`;
   return `Верно. Это слово уже засчитано в этом упражнении. ${nextHint}`;
@@ -1891,6 +1953,7 @@ function checkAnswer(value, answer) {
   }
 
   const feedback = els.quizCard.querySelector("#feedback");
+  if (!String(value).trim()) { feedback.textContent = 'Впиши слово перед проверкой.'; return; }
   const correctAnswer = els.quizCard.querySelector("#correctAnswer");
   const isCorrect = normalize(value) === normalize(answer);
   playAnswerSound(isCorrect);
@@ -1900,6 +1963,17 @@ function checkAnswer(value, answer) {
   if (correctAnswer) {
     correctAnswer.classList.toggle("hidden", isCorrect);
     correctAnswer.innerHTML = isCorrect ? "" : `Правильно: <strong>${escapeHtml(answer)}</strong>`;
+  }
+  if (quizMode === 'context') {
+    const collection = getActiveCollection();
+    const eligible = BookWordsContext.eligible(collection.words);
+    els.quizCard.querySelector('.context-source').textContent = `${currentQuizWord.collectionName || collection.name} · ${getContextProgress(eligible)} / ${Math.min(DAILY_GOAL, eligible.length)} сегодня`;
+    els.quizCard.querySelector('.context-help').textContent = 'Прочитай предложение целиком и послушай, как оно звучит.';
+    els.quizCard.querySelector('.context-sentence').innerHTML = contextSentence(BookWordsContext.create(currentQuizWord), true);
+    correctAnswer.classList.remove('hidden');
+    correctAnswer.innerHTML = `<strong>${escapeHtml(currentQuizWord.en)}</strong> — ${escapeHtml(currentQuizWord.ru)}<button id="speakContext" class="ghost-button" type="button">${uiIcon('sound')} Послушать предложение</button>`;
+    correctAnswer.querySelector('button').onclick = () => speak(currentQuizWord.example);
+    els.quizCard.querySelector('#quizAnswer').readOnly = true;
   }
   showAnswerAnimation(isCorrect, value, answer);
   scheduleWord(currentQuizWord, isCorrect, false);
@@ -1980,7 +2054,7 @@ function deleteCollection(collectionId) {
 function pruneDailyGoalProgress() {
   const existingWordIds = new Set(state.collections.flatMap((collection) => collection.words.map((word) => word.id)));
 
-  QUIZ_MODES.forEach((mode) => {
+  ALL_LESSON_MODES.forEach((mode) => {
     dailyGoal.modes[mode] = (dailyGoal.modes[mode] || []).filter((wordId) => existingWordIds.has(wordId));
   });
 
@@ -2127,6 +2201,8 @@ function setActiveTab(tabName) {
 }
 
 function setQuizMode(modeName) {
+  if (!ALL_LESSON_MODES.includes(modeName)) return;
+  contextReview = false;
   quizMode = modeName;
   document.querySelectorAll(".mode-button").forEach((mode) => {
     mode.classList.toggle("active", mode.dataset.mode === modeName);

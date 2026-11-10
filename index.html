@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#061827" />
     <meta name="description" content="BookWords помогает учить английские слова из книг через карточки, тесты, звук и визуальные ассоциации." />
-    <meta name="app-version" content="2026-11-10-v28" />
+    <meta name="app-version" content="2026-11-10-v29" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BookWords" />
@@ -14,8 +14,8 @@
     <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
     <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=night-v28" />
-    <link rel="stylesheet" href="theme-night.css?v=night-v28" />
+    <link rel="stylesheet" href="styles.css?v=night-v29" />
+    <link rel="stylesheet" href="theme-night.css?v=night-v29" />
   </head>
   <body>
     <div class="ambient-scene" aria-hidden="true"><div class="landscape-layer"></div><div class="aurora aurora-one"></div><div class="aurora aurora-two"></div><canvas id="ambientStars"></canvas><div class="pointer-halo"></div></div>
@@ -100,7 +100,7 @@
         <div id="syncStatus" class="sync-status" title="Облачная синхронизация готова к подключению.">Облако: подготовлено</div>
         </div>
         </div>
-        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 28</span></div>
+        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 29</span></div>
       </aside>
 
       <main id="main" class="main">
@@ -199,6 +199,10 @@
             <div class="section-heading"><div><p class="eyebrow">ПРАКТИКА ДЕЛАЕТ СЛОВА ТВОИМИ</p><h3>Твоя тренировка</h3></div><span>Enter: проверить, затем продолжить</span></div>
             <div class="quiz-layout">
               <div class="quiz-controls">
+                <button class="mode-button" data-mode="context" type="button">
+                  <span>В контексте</span>
+                  <small data-mode-progress="context">Примеры из книги</small>
+                </button>
                 <button class="mode-button active" data-mode="en-ru" type="button">
                   <span>EN → RU</span>
                   <small data-mode-progress="en-ru">0 / 10</small>
@@ -244,8 +248,9 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="sync-engine.js?v=night-v28"></script>
-    <script src="script.js?v=night-v28"></script>
-    <script src="ambience.js?v=night-v28"></script>
+    <script src="context-lesson.js?v=night-v29"></script>
+    <script src="sync-engine.js?v=night-v29"></script>
+    <script src="script.js?v=night-v29"></script>
+    <script src="ambience.js?v=night-v29"></script>
   </body>
 </html>
