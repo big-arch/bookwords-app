@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-16-v27",
+  "version": "2026-11-10-v28",
   "features": [
     "device-sync-key",
     "sidebar-sync-button",
@@ -20,6 +20,7 @@
     "interactive-background-and-glow",
     "motion-pause-and-reduced-motion",
     "circular-daily-progress",
-    "animated-answer-feedback"
+    "animated-answer-feedback",
+    "revision-checked-device-sync"
   ]
 }

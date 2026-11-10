@@ -1,4 +1,4 @@
-const CACHE_NAME = "bookwords-pwa-v27";
+const CACHE_NAME = "bookwords-pwa-v28";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "./ambience.js",
   "./assets/night-forest.png",
   "./script.js",
+  "./sync-engine.js",
   "./version.json",
   "./manifest.webmanifest",
   "./icons/bookwords-icon.svg"

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#061827" />
     <meta name="description" content="BookWords помогает учить английские слова из книг через карточки, тесты, звук и визуальные ассоциации." />
-    <meta name="app-version" content="2026-10-16-v27" />
+    <meta name="app-version" content="2026-11-10-v28" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BookWords" />
@@ -4216,6 +4216,12 @@ body {
   }
 }
 
+.sync-help { font-size: 12px; line-height: 1.55; color: var(--muted, #a9c3db); overflow-wrap: anywhere; }
+.sync-conflict { padding: 12px; border: 1px solid #dca65a; border-radius: 12px; background: #241f24; font-size: 13px; line-height: 1.5; }
+.sync-conflict button { width: 100%; margin-top: 8px; white-space: normal; }
+.sync-conflict[hidden] { display: none; }
+.cloud-panel > button { width: 100%; white-space: normal; margin-top: 8px; }
+
 </style>
   </head>
   <body>
@@ -4267,12 +4273,26 @@ body {
             </span>
             <span id="cloudUserLabel" class="cloud-state">не подключено</span>
           </summary>
-          <input id="cloudEmail" type="text" placeholder="Личный код синхронизации" aria-label="Личный код синхронизации" autocomplete="off" />
+          <input id="cloudEmail" type="password" placeholder="Личный код синхронизации" aria-label="Личный код синхронизации" autocomplete="off" />
           <div class="cloud-actions">
             <button id="loginCloudButton" class="ghost-button" type="button">Создать код</button>
             <button id="verifyCloudButton" class="ghost-button" type="button">Подключить</button>
             <button id="logoutCloudButton" class="ghost-button" type="button">Выйти</button>
           </div>
+          <div class="cloud-actions">
+            <button id="copyCloudCode" class="ghost-button" type="button">Копировать код</button>
+            <button id="showCloudCode" class="ghost-button" type="button">Показать код</button>
+          </div>
+          <p class="sync-help">На первом устройстве создай код, на втором — вставь его и нажми «Подключить». Код открывает доступ к словарю: сохрани его у себя.</p>
+          <p id="syncNotice" role="status" aria-live="polite" class="sync-help"></p>
+          <div id="syncConflict" class="sync-conflict" hidden>
+            <strong>Есть две версии словаря</strong>
+            <p id="syncComparison"></p>
+            <p>Изменения на устройствах различаются. Выбери, какую версию использовать. Перед заменой сохраним резервную копию.</p>
+            <button id="use-cloud" class="ghost-button" type="button">Взять из облака</button>
+            <button id="use-local" class="ghost-button" type="button">Оставить на этом устройстве</button>
+          </div>
+          <button id="downloadSyncBackup" class="ghost-button" type="button">Скачать копию до замены</button>
           <details class="cloud-advanced">
             <summary>Настройки Supabase</summary>
             <input id="cloudUrl" type="url" placeholder="Supabase URL" aria-label="Supabase URL" autocomplete="off" />
@@ -4287,7 +4307,7 @@ body {
         <div id="syncStatus" class="sync-status" title="Облачная синхронизация готова к подключению.">Облако: подготовлено</div>
         </div>
         </div>
-        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 27</span></div>
+        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 28</span></div>
       </aside>
 
       <main id="main" class="main">
@@ -4432,6 +4452,62 @@ body {
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script>
+/* Version-checked sync; storage and transport are injected for deterministic tests. */
+(function (root) {
+  class BookWordsSync {
+    static equal(a, b) {
+      const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
+        ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+      return JSON.stringify(canonical([a.state,a.dailyGoal,a.streak,a.imageCache])) === JSON.stringify(canonical([b.state,b.dailyGoal,b.streak,b.imageCache]));
+    }
+    constructor(options) { Object.assign(this, options); this.running = false; this.conflict = null; }
+    async run(choice) {
+      if (this.running || (this.conflict && !choice)) return false;
+      this.running = true;
+      this.status('syncing');
+      try {
+        const queued = this.queue();
+        const local = JSON.parse(JSON.stringify(this.snapshot()));
+        const remote = await this.rpc(null, null);
+        const base = this.revision();
+        if (choice && this.conflict && this.conflict.revision !== remote.revision) {
+          this.conflict = remote; this.status('conflict'); return false;
+        }
+        const same = BookWordsSync.equal;
+        const changedDuringRead = this.queue() !== queued;
+        if (changedDuringRead) { this.status('pending'); return false; }
+        if (!choice && queued && base !== remote.revision && !same(local, remote.data)) {
+          this.conflict = remote;
+          this.status('conflict');
+          return false;
+        }
+        if (choice === 'local' || (choice !== 'cloud' && queued && !same(local, remote.data))) {
+          if (choice) this.backup(remote.data, 'cloud');
+          const saved = await this.rpc(remote.revision, local);
+          if (!saved.accepted) { this.conflict = saved; this.status('conflict'); return false; }
+          this.setRevision(saved.revision);
+          this.clearQueue(queued);
+        } else {
+          if (!same(local, remote.data)) {
+            this.backup(local, 'local');
+            this.apply(remote.data);
+          }
+          this.setRevision(remote.revision);
+          this.clearQueue(queued);
+        }
+        this.conflict = null;
+        this.status(this.queue() ? 'pending' : 'synced');
+        return true;
+      } catch (error) { this.status('offline', error); return false; }
+      finally { this.running = false; this.idle?.(); }
+    }
+  }
+  if (typeof module !== 'undefined') module.exports = BookWordsSync;
+  else root.BookWordsSync = BookWordsSync;
+})(typeof window === 'undefined' ? globalThis : window);
+
+</script>
+    <script>
 const STORAGE_KEY = "bookwords.v1";
 const DAILY_GOAL_KEY = "bookwords.dailyGoal.v1";
 const STREAK_KEY = "bookwords.streak.v1";
@@ -4439,14 +4515,10 @@ const IMAGE_CACHE_KEY = "bookwords.imageCache.v1";
 const CLOUD_CONFIG_KEY = "bookwords.cloudConfig.v1";
 const SYNC_QUEUE_KEY = "bookwords.syncQueue.v1";
 const LOCAL_UPDATED_KEY = "bookwords.localUpdatedAt.v1";
-const CLOUD_LOGIN_NEXT_AT_KEY = "bookwords.cloudLoginNextAt.v1";
 const DEVICE_SYNC_KEY = "bookwords.deviceSyncKey.v1";
 const DEFAULT_SUPABASE_URL = "https://renbakjudvdnkjvjujti.supabase.co";
 const DEFAULT_SUPABASE_PUBLIC_KEY = "sb_publishable_tJ2cQXwiFEv-1r6wHRwndg_5hEN-h4C";
-const CLOUD_SYNC_TABLE = "bookwords_sync";
 const TRANSLATION_DEBOUNCE_MS = 450;
-const CLOUD_LOGIN_COOLDOWN_MS = 120000;
-const CLOUD_RATE_LIMIT_COOLDOWN_MS = 600000;
 const DAILY_GOAL = 10;
 const MAX_STARS = 7;
 const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || "dev";
@@ -4700,87 +4772,60 @@ function scheduleCloudSync() {
   syncTimer = window.setTimeout(syncNow, 800);
 }
 
-async function syncNow() {
-  if (!cloudConfig.enabled || !supabaseClient) {
-    renderSyncStatus();
-    return;
-  }
+var syncEngine = null;
+const SYNC_REVISION_KEY = "bookwords.syncRevision.v2";
+const SYNC_BACKUP_KEY = "bookwords.syncBackup.v2";
 
-  const queued = localStorage.getItem(SYNC_QUEUE_KEY);
-  if (!queued) {
-    renderSyncStatus();
-    return;
-  }
-
-  cloudConfig.status = "syncing";
-  saveCloudConfig();
-  renderSyncStatus();
-
-  try {
-    const payload = JSON.parse(queued);
-    await cloudStorageAdapter.push(payload.snapshot || createDataSnapshot());
-    localStorage.removeItem(SYNC_QUEUE_KEY);
-    cloudConfig.status = "synced";
-    cloudConfig.lastSyncAt = new Date().toISOString();
-  } catch (error) {
-    cloudConfig.status = "offline";
-    cloudConfig.lastError = error?.message || "Sync failed";
-  }
-
-  saveCloudConfig();
-  renderSyncStatus();
+function backupSyncSnapshot(snapshot, source) {
+  localStorage.setItem(SYNC_BACKUP_KEY, JSON.stringify({ savedAt: new Date().toISOString(), source, snapshot }));
 }
 
-const cloudStorageAdapter = {
-  getClient() {
-    if (supabaseClient) return supabaseClient;
-    if (!window.supabase?.createClient) {
-      throw new Error("Supabase library is not loaded.");
+async function cloudRpc(code, revision = null, data = null, create = false) {
+  if (!supabaseClient) supabaseClient = createCloudClient();
+  const { data: result, error } = await supabaseClient.rpc("bookwords_device_sync", {
+    p_code: code, p_revision: revision, p_data: data, p_create: create
+  }).abortSignal(AbortSignal.timeout(15000));
+  if (error) throw error;
+  if (!result?.data?.state?.collections || !Number.isSafeInteger(result.revision)) throw new Error("Некорректный ответ облака");
+  return result;
+}
+
+function makeSyncEngine() {
+  const code = cloudConfig.syncKey;
+  const identity = `${cloudConfig.supabaseUrl}|${code}`;
+  syncEngine = new BookWordsSync({
+    idle: renderSyncStatus,
+    rpc: (revision, data) => cloudRpc(code, revision, data),
+    queue: () => localStorage.getItem(SYNC_QUEUE_KEY),
+    snapshot: createDataSnapshot,
+    revision: () => {
+      try { const saved = JSON.parse(localStorage.getItem(SYNC_REVISION_KEY)); return saved?.identity === identity ? saved.revision : null; }
+      catch { return null; }
+    },
+    setRevision: revision => localStorage.setItem(SYNC_REVISION_KEY, JSON.stringify({identity, revision})),
+    clearQueue: queued => { if (localStorage.getItem(SYNC_QUEUE_KEY) === queued) localStorage.removeItem(SYNC_QUEUE_KEY); },
+    apply: applyCloudSnapshot,
+    backup: backupSyncSnapshot,
+    status: (status, error) => {
+      cloudConfig.status = status;
+      cloudConfig.lastError = error ? readableSyncError(error) : "";
+      if (status === "synced") cloudConfig.lastSyncAt = new Date().toISOString();
+      saveCloudConfig(); renderSyncStatus();
     }
-    if (!cloudConfig.supabaseUrl || !cloudConfig.supabaseAnonKey) {
-      throw new Error("Supabase settings are empty.");
-    }
+  });
+}
 
-    supabaseClient = createCloudClient();
-    return supabaseClient;
-  },
+function readableSyncError(error) {
+  if (error?.code === "P0002") return "Код не найден. Проверь его на другом устройстве.";
+  if (error?.code === "22023") return "Проверь код и формат словаря.";
+  return "Не удалось связаться с облаком. Слова сохранены на устройстве. Повторим после восстановления связи.";
+}
 
-  async getUser() {
-    const key = normalizeSyncKey(cloudConfig.syncKey || cloudConfig.email);
-    return key ? { id: key } : null;
-  },
-
-  async push(snapshot) {
-    const client = this.getClient();
-    const user = await this.getUser();
-    if (!user) throw new Error("Введите личный код синхронизации.");
-
-    const { error } = await client
-      .from(CLOUD_SYNC_TABLE)
-      .upsert({
-        sync_key: user.id,
-        updated_at: snapshot.updatedAt || new Date().toISOString(),
-        data: snapshot
-      });
-
-    if (error) throw error;
-  },
-
-  async pull() {
-    const client = this.getClient();
-    const user = await this.getUser();
-    if (!user) throw new Error("Введите личный код синхронизации.");
-
-    const { data, error } = await client
-      .from(CLOUD_SYNC_TABLE)
-      .select("data, updated_at")
-      .eq("sync_key", user.id)
-      .maybeSingle();
-
-    if (error) throw error;
-    return data?.data || null;
-  }
-};
+async function syncNow() {
+  if (!cloudConfig.enabled) return false;
+  if (!syncEngine) makeSyncEngine();
+  return syncEngine.run();
+}
 
 function applyCloudSnapshot(snapshot) {
   if (!snapshot?.state?.collections) return false;
@@ -4802,7 +4847,6 @@ function applyCloudSnapshot(snapshot) {
   localStorage.setItem(STREAK_KEY, JSON.stringify(streak));
   localStorage.setItem(IMAGE_CACHE_KEY, JSON.stringify(imageCache));
   localStorage.setItem(LOCAL_UPDATED_KEY, snapshot.updatedAt || new Date().toISOString());
-  localStorage.removeItem(SYNC_QUEUE_KEY);
   refreshGeneratedImages();
   render();
   return true;
@@ -4817,8 +4861,8 @@ function normalizeSyncKey(value) {
 }
 
 function createSyncKey() {
-  const random = crypto.getRandomValues(new Uint32Array(2));
-  return `bookwords-${random[0].toString(36)}-${random[1].toString(36)}`;
+  const random = crypto.getRandomValues(new Uint8Array(20));
+  return `bw-${Array.from(random, n => n.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function getAppBaseUrl() {
@@ -4851,20 +4895,6 @@ function createCloudClient() {
       persistSession: true
     }
   });
-}
-
-async function completeCloudLoginFromUrl(client) {
-  const url = new URL(window.location.href);
-  const code = url.searchParams.get("code");
-  if (!code) return false;
-
-  const { error } = await client.auth.exchangeCodeForSession(code);
-  if (error) throw error;
-
-  url.searchParams.delete("code");
-  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-  clearCloudLoginCooldown();
-  return true;
 }
 
 function validateCloudSettings() {
@@ -4900,43 +4930,24 @@ function hydrateCloudForm() {
 
 async function initCloud() {
   hydrateCloudForm();
-  if (!cloudIsConfigured() || !window.supabase?.createClient) {
-    renderSyncStatus();
-    return;
+  if (cloudConfig.syncKey) {
+    cloudConfig.enabled = true;
+    makeSyncEngine();
+    if (syncEngine.revision() === null && localStorage.getItem(STORAGE_KEY) && !localStorage.getItem(SYNC_QUEUE_KEY)) queueCloudSync("upgrade");
+    await syncNow();
   }
-
-  try {
-    supabaseClient = createCloudClient();
-    const user = normalizeSyncKey(cloudConfig.syncKey || cloudConfig.email) ? { id: normalizeSyncKey(cloudConfig.syncKey || cloudConfig.email) } : null;
-    cloudConfig.enabled = Boolean(user);
-    cloudConfig.userId = user?.id || "";
-    cloudConfig.status = user ? "synced" : "local";
-    saveCloudConfig();
-
-    if (user) {
-      await syncFromCloudThenPushLocal();
-    }
-  } catch (error) {
-    cloudConfig.status = "offline";
-    cloudConfig.lastError = error?.message || "Cloud init failed";
-    saveCloudConfig();
-  }
-
   renderSyncStatus();
 }
 
 async function saveCloudSettings() {
+  if (syncEngine?.running) return;
+  const validation = validateCloudSettings();
+  if (validation) { alert(validation); return; }
   cloudConfig.supabaseUrl = normalizeSupabaseUrl(els.cloudUrl.value);
-  els.cloudUrl.value = cloudConfig.supabaseUrl;
   cloudConfig.supabaseAnonKey = els.cloudAnonKey.value.trim();
-  cloudConfig.syncKey = normalizeSyncKey(els.cloudEmail.value);
-  cloudConfig.email = cloudConfig.syncKey;
-  cloudConfig.provider = "supabase";
-  cloudConfig.status = cloudIsConfigured() ? "local" : "local";
-  supabaseClient = null;
+  supabaseClient = null; syncEngine = null;
   saveCloudConfig();
-  await initCloud();
-  renderSyncStatus();
+  await syncNow();
 }
 
 function setCloudBusy(isBusy) {
@@ -4950,170 +4961,61 @@ function setCloudBusy(isBusy) {
   });
 
   if (els.loginCloudButton) {
-    els.loginCloudButton.disabled = isBusy || getCloudLoginWaitSeconds() > 0;
+    els.loginCloudButton.disabled = isBusy || Boolean(cloudConfig.enabled);
   }
 }
 
-function getCloudLoginWaitSeconds() {
-  const nextAt = Number(localStorage.getItem(CLOUD_LOGIN_NEXT_AT_KEY) || 0);
-  return Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
-}
+async function loginCloud() { await connectCloud(true); }
+async function verifyCloudCode() { await connectCloud(false); }
 
-function setCloudLoginCooldown(durationMs = CLOUD_LOGIN_COOLDOWN_MS) {
-  localStorage.setItem(CLOUD_LOGIN_NEXT_AT_KEY, String(Date.now() + durationMs));
-}
-
-function clearCloudLoginCooldown() {
-  localStorage.removeItem(CLOUD_LOGIN_NEXT_AT_KEY);
-}
-
-function isSupabaseRateLimit(error) {
-  return String(error?.message || "").toLowerCase().includes("rate limit");
-}
-
-function getReadableError(error) {
-  if (!error) return "Неизвестная ошибка";
-  if (error.message) return error.message;
-  if (error.error_description) return error.error_description;
-  if (error.error) return error.error;
-
-  try {
-    const text = JSON.stringify(error);
-    return text && text !== "{}" ? text : "Supabase не вернул текст ошибки";
-  } catch {
-    return String(error);
-  }
-}
-
-async function loginCloud() {
-  const nextKey = createSyncKey();
-  els.cloudEmail.value = nextKey;
-  await verifyCloudCode();
-}
-
-async function verifyCloudCode() {
-  const validationError = validateCloudSettings();
-  if (validationError) {
-    alert(validationError);
+async function connectCloud(create) {
+  if (syncEngine?.running) return;
+  if (cloudConfig.enabled) {
+    document.querySelector("#syncNotice").textContent = "Сначала отключи текущий код, чтобы подключить другой.";
     return;
   }
-
-  await saveCloudSettings();
-
-  const syncKey = normalizeSyncKey(els.cloudEmail.value);
-  if (!syncKey) {
-    alert("Введи или создай личный код синхронизации.");
-    return;
-  }
-
+  const pendingKey = "bookwords.pendingCode.v2";
+  const code = create ? (localStorage.getItem(pendingKey) || createSyncKey()) : normalizeSyncKey(els.cloudEmail.value);
+  if (!code) { document.querySelector("#syncNotice").textContent = "Введи код с другого устройства или создай новый."; return; }
+  if (create) localStorage.setItem(pendingKey, code);
+  setCloudBusy(true);
   try {
-    setCloudBusy(true);
-    cloudConfig.syncKey = syncKey;
-    cloudConfig.email = syncKey;
-    cloudConfig.enabled = true;
-    cloudConfig.userId = syncKey;
-    cloudConfig.status = "synced";
-    clearCloudLoginCooldown();
-    saveCloudConfig();
-    renderSyncStatus();
-    await syncFromCloudThenPushLocal();
-    alert("Облако подключено. Введи этот же код на телефоне, чтобы получить те же слова.");
+    const before = JSON.parse(JSON.stringify(createDataSnapshot()));
+    const queueBefore = localStorage.getItem(SYNC_QUEUE_KEY);
+    const remote = await cloudRpc(code, null, create ? before : null, create);
+    backupSyncSnapshot(before, 'local');
+    cloudConfig.syncKey = code; cloudConfig.email = code; cloudConfig.userId = code; cloudConfig.enabled = true;
+    cloudConfig.lastSyncAt = "";
+    saveCloudConfig(); hydrateCloudForm(); makeSyncEngine();
+    if (create && BookWordsSync.equal(remote.data, before)) {
+      syncEngine.setRevision(remote.revision);
+      syncEngine.clearQueue(queueBefore);
+    } else if (getLocalUpdatedAt() && !localStorage.getItem(SYNC_QUEUE_KEY)) {
+      queueCloudSync("connect");
+    }
+    localStorage.removeItem(pendingKey);
+    await syncNow();
   } catch (error) {
-    cloudConfig.status = "offline";
-    cloudConfig.lastError = getReadableError(error);
-    saveCloudConfig();
-    renderSyncStatus();
-    alert(`Синхронизация не подключилась.\n\nОшибка: ${cloudConfig.lastError}\n\nЕсли таблица ещё не создана, открой SQL Editor в Supabase и выполни SQL, который я дам в чате.`);
-  } finally {
-    setCloudBusy(false);
-  }
+    cloudConfig.status = "offline"; cloudConfig.lastError = readableSyncError(error);
+    saveCloudConfig(); renderSyncStatus();
+  } finally { setCloudBusy(false); renderSyncStatus(); }
 }
 
 async function logoutCloud() {
-  cloudConfig.enabled = false;
-  cloudConfig.userId = "";
-  cloudConfig.syncKey = "";
-  cloudConfig.status = "local";
+  if (syncEngine?.running) return;
+  backupSyncSnapshot(createDataSnapshot(), 'local');
+  cloudConfig.enabled = false; cloudConfig.userId = ""; cloudConfig.syncKey = ""; cloudConfig.email = "";
+  cloudConfig.status = "local"; cloudConfig.lastError = ""; cloudConfig.lastSyncAt = "";
+  syncEngine = null;
+  window.clearTimeout(syncTimer);
   localStorage.removeItem(DEVICE_SYNC_KEY);
-  saveCloudConfig();
-  renderSyncStatus();
-}
-
-function isCloudNewer(cloudSnapshot) {
-  if (!cloudSnapshot?.updatedAt) return false;
-  const localUpdatedAt = getLocalUpdatedAt();
-  if (!localUpdatedAt) return true;
-  return new Date(cloudSnapshot.updatedAt).getTime() > new Date(localUpdatedAt).getTime();
-}
-
-async function syncFromCloudThenPushLocal() {
-  if (!cloudConfig.enabled || !supabaseClient) return;
-
-  cloudConfig.status = "syncing";
-  saveCloudConfig();
-  renderSyncStatus();
-
-  try {
-    const cloudSnapshot = await cloudStorageAdapter.pull();
-    if (cloudSnapshot && isCloudNewer(cloudSnapshot)) {
-      applyCloudSnapshot(cloudSnapshot);
-    } else {
-      await cloudStorageAdapter.push(createDataSnapshot());
-      localStorage.removeItem(SYNC_QUEUE_KEY);
-    }
-
-    cloudConfig.status = "synced";
-    cloudConfig.lastSyncAt = new Date().toISOString();
-  } catch (error) {
-    cloudConfig.status = "offline";
-    cloudConfig.lastError = error?.message || "Sync failed";
-  }
-
-  saveCloudConfig();
-  renderSyncStatus();
+  localStorage.removeItem(SYNC_REVISION_KEY);
+  saveCloudConfig(); hydrateCloudForm(); renderSyncStatus();
 }
 
 async function manualCloudSync() {
-  const validationError = validateCloudSettings();
-  if (validationError) {
-    alert(validationError);
-    return;
-  }
-
-  await saveCloudSettings();
-
-  try {
-    setCloudBusy(true);
-    cloudStorageAdapter.getClient();
-    const user = await cloudStorageAdapter.getUser();
-    if (!user) {
-      cloudConfig.enabled = false;
-      cloudConfig.userId = "";
-      cloudConfig.status = "local";
-      saveCloudConfig();
-      renderSyncStatus();
-      alert("Сначала создай или введи личный код синхронизации и нажми «Подключить».");
-      return;
-    }
-
-    cloudConfig.enabled = true;
-    cloudConfig.userId = user.id;
-    await syncFromCloudThenPushLocal();
-
-    if (cloudConfig.status === "synced") {
-      alert("Синхронизация готова. Книги и слова сохранены в облаке.");
-    } else if (cloudConfig.lastError) {
-      alert(`Синхронизация не прошла.\n\nОшибка: ${cloudConfig.lastError}`);
-    }
-  } catch (error) {
-    cloudConfig.status = "offline";
-    cloudConfig.lastError = error?.message || "Manual sync failed";
-    saveCloudConfig();
-    renderSyncStatus();
-    alert(`Синхронизация не прошла.\n\nОшибка: ${cloudConfig.lastError}`);
-  } finally {
-    setCloudBusy(false);
-  }
+  if (!cloudConfig.enabled) { document.querySelector(".cloud-panel").open = true; els.cloudEmail.focus(); return; }
+  await syncNow();
 }
 
 function renderSyncStatus() {
@@ -5122,15 +5024,34 @@ function renderSyncStatus() {
   const hasQueue = Boolean(localStorage.getItem(SYNC_QUEUE_KEY));
   const labels = {
     syncing: "Синхронизация...",
+    conflict: "Выбери версию словаря",
+    pending: "Изменения ждут отправки",
     synced: "Сохранено в облаке",
     offline: "Облако ждёт сеть",
     local: cloudIsConfigured() ? "Введи код синхронизации" : "Настрой облако",
     "login-sent": "Введи код синхронизации",
     "rate-limited": "Подожди перед новым кодом"
   };
-  const statusText = hasQueue && cloudConfig.enabled && cloudConfig.status !== "syncing" ? "Есть несохранённые изменения" : labels[cloudConfig.status] || labels.local;
+  const statusText = hasQueue && cloudConfig.enabled && !["syncing", "conflict", "offline"].includes(cloudConfig.status) ? "Есть несохранённые изменения" : labels[cloudConfig.status] || labels.local;
   els.syncStatus.textContent = statusText;
   els.syncStatus.title = cloudConfig.lastError || (cloudConfig.lastSyncAt ? `Последняя синхронизация: ${cloudConfig.lastSyncAt}` : "Supabase синхронизация.");
+
+  const notice = document.querySelector("#syncNotice");
+  if (notice) notice.textContent = cloudConfig.lastError || (cloudConfig.status === "synced" && cloudConfig.lastSyncAt
+    ? `Сохранено: ${new Date(cloudConfig.lastSyncAt).toLocaleString("ru-RU")}` : statusText);
+  const conflict = document.querySelector("#syncConflict");
+  if (conflict) {
+    conflict.hidden = cloudConfig.status !== "conflict";
+    if (!conflict.hidden && syncEngine?.conflict) {
+      const describe = snapshot => `${snapshot.state.collections.length} книг, ${snapshot.state.collections.reduce((sum, c) => sum + c.words.length, 0)} слов`;
+      document.querySelector("#syncComparison").textContent = `Здесь: ${describe(createDataSnapshot())}. В облаке: ${describe(syncEngine.conflict.data)}.`;
+    }
+    if (!conflict.hidden) document.querySelector(".cloud-panel").open = true;
+  }
+  els.cloudEmail.readOnly = Boolean(cloudConfig.enabled);
+  document.querySelector("#copyCloudCode").disabled = !cloudConfig.enabled;
+  els.verifyCloudButton.disabled = Boolean(cloudConfig.enabled) || Boolean(syncEngine?.running);
+  els.logoutCloudButton.disabled = Boolean(syncEngine?.running);
 
   if (els.cloudUserLabel) {
     els.cloudUserLabel.textContent = cloudConfig.userId ? "подключено" : "не подключено";
@@ -5143,7 +5064,7 @@ function renderSyncStatus() {
   }
 
   if (els.loginCloudButton) {
-    els.loginCloudButton.disabled = Boolean(cloudConfig.userId);
+    els.loginCloudButton.disabled = Boolean(cloudConfig.userId) || Boolean(syncEngine?.running);
     els.loginCloudButton.textContent = "Создать код";
   }
 }
@@ -6938,6 +6859,34 @@ renderGeneratedPreview();
 registerPwa();
 initCloud();
 window.setInterval(renderSyncStatus, 30000);
+
+window.addEventListener("online", () => syncNow());
+window.addEventListener("offline", () => {
+  if (cloudConfig.enabled) { cloudConfig.status = "offline"; renderSyncStatus(); }
+});
+function syncWhenIdle() {
+  if (document.visibilityState === "visible" && activeTab !== "quiz" && !els.wordEnglish.value && !els.wordRussian.value && !els.wordExample.value && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) syncNow();
+}
+document.addEventListener("visibilitychange", syncWhenIdle);
+window.setInterval(syncWhenIdle, 20000);
+document.querySelector("#copyCloudCode").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(cloudConfig.syncKey); document.querySelector("#syncNotice").textContent = "Код скопирован. Вставь его в BookWords на другом устройстве."; }
+  catch { els.cloudEmail.type = "text"; els.cloudEmail.select(); document.querySelector("#syncNotice").textContent = "Выделен код — скопируй его вручную."; }
+});
+document.querySelector("#showCloudCode").addEventListener("click", event => {
+  const show = els.cloudEmail.type === "password";
+  els.cloudEmail.type = show ? "text" : "password";
+  event.currentTarget.textContent = show ? "Скрыть код" : "Показать код";
+});
+for (const choice of ["local", "cloud"]) document.querySelector(`#use-${choice}`).addEventListener("click", () => syncEngine?.run(choice));
+document.querySelector("#downloadSyncBackup").addEventListener("click", () => {
+  const backup = localStorage.getItem(SYNC_BACKUP_KEY);
+  if (!backup) { document.querySelector("#syncNotice").textContent = "Резервная копия появится перед заменой словаря."; return; }
+  const data = JSON.parse(backup).snapshot;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:"application/json"}));
+  const link = document.createElement("a"); link.href = url; link.download = "BookWords-before-sync.json"; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
 
 </script>
     <script>

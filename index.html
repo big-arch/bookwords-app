@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#061827" />
     <meta name="description" content="BookWords помогает учить английские слова из книг через карточки, тесты, звук и визуальные ассоциации." />
-    <meta name="app-version" content="2026-10-16-v27" />
+    <meta name="app-version" content="2026-11-10-v28" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="BookWords" />
@@ -14,8 +14,8 @@
     <link rel="icon" type="image/svg+xml" href="icons/bookwords-icon.svg" />
     <link rel="apple-touch-icon" href="icons/bookwords-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=night-v27" />
-    <link rel="stylesheet" href="theme-night.css?v=night-v27" />
+    <link rel="stylesheet" href="styles.css?v=night-v28" />
+    <link rel="stylesheet" href="theme-night.css?v=night-v28" />
   </head>
   <body>
     <div class="ambient-scene" aria-hidden="true"><div class="landscape-layer"></div><div class="aurora aurora-one"></div><div class="aurora aurora-two"></div><canvas id="ambientStars"></canvas><div class="pointer-halo"></div></div>
@@ -66,12 +66,26 @@
             </span>
             <span id="cloudUserLabel" class="cloud-state">не подключено</span>
           </summary>
-          <input id="cloudEmail" type="text" placeholder="Личный код синхронизации" aria-label="Личный код синхронизации" autocomplete="off" />
+          <input id="cloudEmail" type="password" placeholder="Личный код синхронизации" aria-label="Личный код синхронизации" autocomplete="off" />
           <div class="cloud-actions">
             <button id="loginCloudButton" class="ghost-button" type="button">Создать код</button>
             <button id="verifyCloudButton" class="ghost-button" type="button">Подключить</button>
             <button id="logoutCloudButton" class="ghost-button" type="button">Выйти</button>
           </div>
+          <div class="cloud-actions">
+            <button id="copyCloudCode" class="ghost-button" type="button">Копировать код</button>
+            <button id="showCloudCode" class="ghost-button" type="button">Показать код</button>
+          </div>
+          <p class="sync-help">На первом устройстве создай код, на втором — вставь его и нажми «Подключить». Код открывает доступ к словарю: сохрани его у себя.</p>
+          <p id="syncNotice" role="status" aria-live="polite" class="sync-help"></p>
+          <div id="syncConflict" class="sync-conflict" hidden>
+            <strong>Есть две версии словаря</strong>
+            <p id="syncComparison"></p>
+            <p>Изменения на устройствах различаются. Выбери, какую версию использовать. Перед заменой сохраним резервную копию.</p>
+            <button id="use-cloud" class="ghost-button" type="button">Взять из облака</button>
+            <button id="use-local" class="ghost-button" type="button">Оставить на этом устройстве</button>
+          </div>
+          <button id="downloadSyncBackup" class="ghost-button" type="button">Скачать копию до замены</button>
           <details class="cloud-advanced">
             <summary>Настройки Supabase</summary>
             <input id="cloudUrl" type="url" placeholder="Supabase URL" aria-label="Supabase URL" autocomplete="off" />
@@ -86,7 +100,7 @@
         <div id="syncStatus" class="sync-status" title="Облачная синхронизация готова к подключению.">Облако: подготовлено</div>
         </div>
         </div>
-        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 27</span></div>
+        <div class="sidebar-footer">Читай. Замечай. Запоминай.<span>BookWords / 28</span></div>
       </aside>
 
       <main id="main" class="main">
@@ -230,7 +244,8 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="script.js?v=night-v27"></script>
-    <script src="ambience.js?v=night-v27"></script>
+    <script src="sync-engine.js?v=night-v28"></script>
+    <script src="script.js?v=night-v28"></script>
+    <script src="ambience.js?v=night-v28"></script>
   </body>
 </html>

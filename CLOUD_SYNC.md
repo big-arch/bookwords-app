@@ -1,84 +1,21 @@
-# BookWords Cloud Sync Plan
+# Синхронизация BookWords, v28
 
-The app already stores all user data as one snapshot:
+На первом устройстве открой «Облако» и нажми «Создать код». На втором вставь код и нажми «Подключить». Старые коды продолжают работать. Для разных приложений используются разные коды: код Learn Code не открывает BookWords.
 
-- `state`: books and words;
-- `dailyGoal`: daily lesson progress;
-- `streak`: stars and study streak;
-- `imageCache`: generated image URLs.
+Копирование и показ кода доступны в панели. Код — секрет доступа к словарю, он не включается в URL или экспорт. Новый код содержит 160 случайных бит Web Crypto. Существующие коды не заменяются автоматически. В базе сохранён прежний формат кода для совместимости; это не email-аккаунт.
 
-The current app keeps this snapshot locally and queues every change through `queueCloudSync()`.
-When cloud sync is enabled, `cloudStorageAdapter.push()` can send the same snapshot to a backend.
+Изменения автоматически отправляются после редактирования, при возвращении сети и каждые 20 секунд, когда пользователь не проходит упражнение и не вводит текст. При ошибке данные остаются локально; успешное сохранение показывается только после ответа сервера. После обновления старого приложения может потребоваться один раз выбрать версию словаря.
 
-## Recommended Backend
+Если обе стороны изменились, приложение показывает количество книг и слов и предлагает выбрать локальную или облачную версию. Автоматического объединения нет. Перед заменой сохраняется последняя резервная копия (кнопка «Скачать копию до замены»); её можно вернуть через обычный импорт. Копия хранится только в этом браузере и обновляется при следующей замене. Выход отключает синхронизацию и сохраняет словарь на устройстве. Очистка данных браузера удаляет локальные копии.
 
-Supabase is the simplest next step because it gives:
+## Сервер
 
-- email/social login;
-- PostgreSQL database;
-- row-level security;
-- free tier for early testing;
-- easy future iOS/Android support.
+`cloud-sync.sql` добавляет revision и RPC `bookwords_device_sync`. Блокировка строки и сравнение версии защищают от параллельной перезаписи. Отдельное создание идемпотентно: повтор запроса после потери ответа не перезаписывает профиль. Опечатка при подключении возвращает ошибку, не создавая профиль. Обработка в приватной SECURITY DEFINER-функции проверяет секретный код; публичная обёртка — SECURITY INVOKER, search_path пустой. Это capability-доступ, а не Supabase Auth.
 
-## Supabase Setup
+Порядок развёртывания: SQL setup → клиент v28 → `cloud-sync-lockdown.sql`. Последний шаг закрывает прямой SELECT/INSERT/UPDATE таблицы для anon/authenticated/PUBLIC; доступ остаётся только через RPC. Старым открытым вкладкам v27 требуется обновление. Данные не удаляются. Auth, SMTP и таблицы Learn Code не изменяются.
 
-BookWords now uses a personal sync code instead of email login. The same code
-on every device points to the same cloud snapshot.
+## Проверка
 
-```sql
-create table if not exists bookwords_sync (
-  sync_key text primary key,
-  updated_at timestamptz not null default now(),
-  data jsonb not null default '{}'
-);
+`node --test sync-engine.test.cjs` проверяет push/pull, конфликты и оба выбора, изменения во время запроса, очередь после ошибки, неизвестную базовую версию и сериализацию запросов. SQL CAS, повторное создание и запись проверяются в транзакции с откатом. Браузерная проверка выполняется на отдельных синтетических профилях, без доступа к словарю пользователя.
 
-alter table bookwords_sync enable row level security;
-
-create policy "BookWords can read by sync key"
-on bookwords_sync for select
-using (true);
-
-create policy "BookWords can insert by sync key"
-on bookwords_sync for insert
-with check (true);
-
-create policy "BookWords can update by sync key"
-on bookwords_sync for update
-using (true)
-with check (true);
-```
-
-Each sync code stores one `data` JSON snapshot. Use a long random code generated
-inside BookWords and keep it private.
-
-## App Settings
-
-In the BookWords sidebar:
-
-- click `Создать код` on the first device;
-- use the same generated code on every other device;
-- click `Подключить`.
-
-In Supabase, also open:
-
-`Authentication` -> `URL Configuration`
-
-Set:
-
-- Site URL: `https://big-arch.github.io/bookwords-app/`
-- Redirect URLs: `https://big-arch.github.io/bookwords-app/`
-
-On iPhone, install BookWords from Safari with Share -> Add to Home Screen.
-
-Use the same Supabase settings and the same email on every computer and phone.
-
-Do not use `service_role` or `secret` keys in BookWords.
-
-## Implementation Notes
-
-- `cloudStorageAdapter.push()` writes the snapshot to Supabase.
-- `cloudStorageAdapter.pull()` reads the current user's snapshot.
-- On app start: the app pulls cloud data and keeps the newest `updatedAt`.
-- On every local change: the app saves locally first, queues sync, then pushes to cloud.
-
-This keeps the app usable offline and syncs when the network returns.
+Источники API: [Database Functions](https://supabase.com/docs/guides/database/functions), [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security).
